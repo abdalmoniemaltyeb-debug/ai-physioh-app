@@ -2,97 +2,162 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <title>AI-Spine Medical Platform | منصة تأهيل الظهر المتكاملة</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI-PhyTrack | تطبيق تأهيل الظهر الذكي</title>
+    
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
     <style>
-        :root { --primary: #0f172a; --accent: #38bdf8; --success: #10b981; --danger: #f43f5e; }
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--primary); color: white; margin: 0; padding: 15px; }
-        .page { display: none; max-width: 800px; margin: auto; animation: fadeIn 0.4s; }
+        :root { 
+            --bg: #020617; --card: #0f172a; --accent: #38bdf8; 
+            --text: #f8fafc; --muted: #94a3b8; --danger: #ef4444; 
+        }
+        
+        * { box-sizing: border-box; }
+        body { 
+            background-color: var(--bg); color: var(--text); 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0; padding: 20px; overflow-x: hidden;
+        }
+
+        .container { max-width: 1000px; margin: auto; }
+        .page { display: none; animation: fadeIn 0.4s ease-out; }
         .active { display: block; }
-        .card { background: #1e293b; padding: 25px; border-radius: 20px; border: 1px solid #334155; margin-bottom: 20px; }
-        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; background: #0f172a; color: white; border: 1px solid #475569; }
-        button { background: var(--accent); color: var(--primary); border: none; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; }
-        .video-box { position: relative; border-radius: 20px; overflow: hidden; background: #000; line-height: 0; }
-        #video-input { width: 100%; height: auto; transform: scaleX(-1); } /* مراة */
+
+        /* Card Style */
+        .card { 
+            background: var(--card); padding: 40px; border-radius: 24px; 
+            border: 1px solid #1e293b; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.3);
+            margin-bottom: 20px;
+        }
+
+        h1, h2 { color: var(--text); margin-top: 0; }
+        .accent-text { color: var(--accent); }
+
+        /* Forms & Inputs */
+        label { display: block; margin-top: 20px; color: var(--muted); font-size: 14px; }
+        select { 
+            width: 100%; padding: 15px; margin-top: 8px; border-radius: 12px; 
+            background: #1e293b; color: white; border: 1px solid #334155; font-size: 16px;
+        }
+
+        /* Buttons Navigation */
+        .nav-footer { display: flex; gap: 15px; margin-top: 30px; }
+        .btn { 
+            flex: 1; padding: 18px; border-radius: 14px; border: none; 
+            font-weight: bold; cursor: pointer; transition: 0.3s; 
+            display: flex; align-items: center; justify-content: center; gap: 10px; font-size: 16px;
+        }
+        .btn-primary { background: var(--accent); color: var(--bg); }
+        .btn-secondary { background: #1e293b; color: var(--text); border: 1px solid #334155; }
+        .btn:hover { opacity: 0.9; transform: translateY(-2px); }
+
+        /* Exercise Library Tiles */
+        .tile { 
+            background: #1e293b; padding: 20px; border-radius: 16px; 
+            margin-bottom: 15px; border-right: 4px solid var(--accent);
+        }
+
+        /* Camera Box */
+        .camera-container { 
+            position: relative; width: 100%; border-radius: 24px; 
+            overflow: hidden; background: #000; border: 2px solid var(--accent);
+        }
+        #video-input { width: 100%; height: auto; transform: scaleX(-1); }
         #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .hud { position: absolute; top: 15px; width: 90%; left: 5%; background: rgba(15, 23, 42, 0.9); padding: 10px; border-radius: 10px; border: 1px solid var(--accent); text-align: center; }
-        .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+
+        .hud-overlay { 
+            position: absolute; top: 20px; left: 50%; transform: translateX(-50%); 
+            width: 90%; background: rgba(15, 23, 42, 0.9); padding: 15px; 
+            border-radius: 15px; border: 1px solid var(--accent); text-align: center;
+        }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
 <div class="container">
+    
     <div id="p-diag" class="page active">
         <div class="card">
-            <h2>📝 شيت تقييم حالة الظهر</h2>
-            <p>أجب عن الأسئلة التالية ليقوم النظام بتحديد بروتوكولك العلاجي:</p>
-            <label>أين يتركز الألم الأكبر؟</label>
-            <select id="q1">
-                <option value="back">أسفل الظهر فقط</option>
-                <option value="leg">يمتد للأرجل (عرق نسا)</option>
+            <span style="color: var(--accent); font-weight: bold; letter-spacing: 2px;">AI-PhyTrack ASSESSMENT</span>
+            <h1>شيت التشخيص الذكي 📝</h1>
+            <p style="color: var(--muted);">أجب على الأسئلة التالية لتخصيص محرك الذكاء الاصطناعي لحالتك.</p>
+            
+            <label>أين تشعر بالألم بشكل أساسي؟</label>
+            <select id="q-location">
+                <option value="back">مركز أسفل الظهر</option>
+                <option value="leg">يمتد الألم لأسفل الساق (عرق نسا)</option>
             </select>
-            <label>متى يزداد الألم؟</label>
-            <select id="q2">
-                <option value="flex">عند الانحناء للأمام</option>
-                <option value="ext">عند الوقوف أو فرد الظهر</option>
+
+            <label>ما هي الحركة التي تزيد من حدة الألم؟</label>
+            <select id="q-move">
+                <option value="flex">الانحناء للأمام (ركوع)</option>
+                <option value="ext">الوقوف الطويل أو فرد الظهر</option>
             </select>
-            <label>هل تشعر بتنميل أو خدر؟</label>
-            <select id="q3">
-                <option value="yes">نعم</option>
-                <option value="no">لا</option>
-            </select>
-            <button onclick="analyzeCondition()">تحليل الحالة وتحديد التمارين ←</button>
+
+            <div class="nav-footer">
+                <button class="btn btn-primary" onclick="processDiagnosis()">تحليل الحالة واستمرار <i class="fa-solid fa-arrow-left"></i></button>
+            </div>
         </div>
     </div>
 
     <div id="p-lib" class="page">
         <div class="card">
-            <h2 id="diag-result">النتيجة: انزلاق غضروفي</h2>
-            <div id="exercise-list"></div>
-            <button onclick="startExercise()">ابدأ التمرين الحي 🎥</button>
+            <h2 id="diag-title" class="accent-text">خطة التأهيل المقترحة</h2>
+            <div id="exercise-details"></div>
+            
+            <div class="nav-footer">
+                <button class="btn btn-secondary" onclick="nav('p-diag')"><i class="fa-solid fa-arrow-right"></i> رجوع</button>
+                <button class="btn btn-primary" onclick="startCamera()">بدء المراقبة الحية <i class="fa-solid fa-camera"></i></button>
+            </div>
         </div>
     </div>
 
-    <div id="p-run" class="page">
-        <div class="video-box">
-            <div id="hud" class="hud">جاري تحليل الوضعية الجانبية...</div>
+    <div id="p-cam" class="page">
+        <div class="camera-container">
+            <div id="hud" class="hud-overlay">جاري معايرة الهيكل العظمي الذكي...</div>
             <video id="video-input"></video>
             <canvas id="output-canvas"></canvas>
         </div>
-        <div class="report-grid">
-            <div class="card" style="text-align:center">العداد: <b id="count">0</b></div>
-            <div class="card" style="text-align:center">الدقة: <b id="acc">100%</b></div>
+        
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px;">
+            <div class="card" style="padding: 20px; text-align: center; margin: 0;">العداد <br> <b id="count" style="font-size: 32px; color: var(--accent);">0</b></div>
+            <div class="card" style="padding: 20px; text-align: center; margin: 0;">الزاوية <br> <b id="angle" style="font-size: 32px; color: var(--accent);">0°</b></div>
         </div>
-        <button style="background:var(--danger)" onclick="showFeedback()">إنهاء وجلب التقرير</button>
+
+        <div class="nav-footer">
+            <button class="btn btn-secondary" onclick="location.reload()"><i class="fa-solid fa-rotate-left"></i> إلغاء</button>
+            <button class="btn btn-primary" style="background: var(--danger); color: white;" onclick="location.reload()">إنهاء الجلسة</button>
+        </div>
     </div>
 
-    <div id="p-feed" class="page">
-        <div class="card">
-            <h2>📊 تقرير أداء الجلسة</h2>
-            <div id="feedback-content" style="line-height: 1.8;"></div>
-            <button onclick="location.reload()">جلسة جديدة</button>
-        </div>
-    </div>
 </div>
 
 <script>
-    let userCondition = '';
+    let condition = '';
     let counter = 0;
-    let mistakes = 0;
+    let stage = null;
+    let lastFrameTime = 0;
 
     const protocols = {
-        'disc': { 
-            title: 'بروتوكول الانزلاق الغضروفي', 
-            exercises: ['McKenzie Extension', 'Superman Pose', 'Prone Cobra'],
-            tips: 'ركز على فرد الظهر وتجنب الانحناء الأمامي.' 
+        'disc': {
+            title: "بروتوكول الانزلاق الغضروفي (Disc)",
+            exs: [
+                {n: "تمرين ماكنزي (McKenzie)", d: "فرد الظهر للخلف لتقليل ضغط الديسك على العصب."},
+                {n: "تمرين الكوبرا (Prone Cobra)", d: "تقوية عضلات الظهر العميقة لتحسين الثبات."}
+            ]
         },
-        'stenosis': { 
-            title: 'بروتوكول تضيق القناة', 
-            exercises: ['Pelvic Tilts', 'Knee to Chest', 'Child Pose'],
-            tips: 'تمارين الثني تريح القناة العصبية.' 
+        'stenosis': {
+            title: "بروتوكول تضيق القناة (Stenosis)",
+            exs: [
+                {n: "إمالة الحوض (Pelvic Tilt)", d: "إلغاء قوس الظهر لتوسيع مخارج الأعصاب."},
+                {n: "الركبة للصدر (Knee to Chest)", d: "إطالة عضلات أسفل الظهر بلطف."}
+            ]
         }
     };
 
@@ -101,23 +166,29 @@
         document.getElementById(id).classList.add('active');
     }
 
-    function analyzeCondition() {
-        const q1 = document.getElementById('q1').value;
-        const q2 = document.getElementById('q2').value;
+    function processDiagnosis() {
+        const move = document.getElementById('q-move').value;
+        condition = (move === 'flex') ? 'disc' : 'stenosis';
         
-        // منطق التحديد التلقائي
-        userCondition = (q2 === 'flex') ? 'disc' : 'stenosis';
-        
-        document.getElementById('diag-result').innerText = protocols[userCondition].title;
-        const list = document.getElementById('exercise-list');
-        list.innerHTML = protocols[userCondition].exercises.map(ex => `<div style="background:#334155; padding:10px; margin:5px 0; border-radius:10px;">✅ ${ex}</div>`).join('');
+        const p = protocols[condition];
+        document.getElementById('diag-title').innerText = p.title;
+        document.getElementById('exercise-details').innerHTML = p.exs.map(ex => `
+            <div class="tile">
+                <b>${ex.n}</b><br>
+                <small style="color: var(--muted);">${ex.d}</small>
+            </div>
+        `).join('');
         nav('p-lib');
     }
 
-    function startExercise() { nav('p-run'); initAI(); }
+    function startCamera() {
+        nav('p-cam');
+        initAI();
+    }
 
+    // AI Logic
     const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
-    pose.setOptions({modelComplexity: 0, minDetectionConfidence: 0.5});
+    pose.setOptions({ modelComplexity: 0, smoothLandmarks: false, minDetectionConfidence: 0.5 });
 
     pose.onResults((res) => {
         if (!res.poseLandmarks) return;
@@ -125,77 +196,26 @@
         drawConnectors(canvasCtx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#38bdf8', lineWidth: 2});
         
         const lm = res.poseLandmarks;
-        const hud = document.getElementById('hud');
-        // 1. إعدادات السرعة القصوى لـ Mediapipe
-const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
-
-pose.setOptions({
-    modelComplexity: 0,       // 0 هو الأسرع (Lite Model)
-    smoothLandmarks: false,   // إيقاف التنعيم يقلل العمليات الحسابية
-    minDetectionConfidence: 0.5,
-    minTrackingConfidence: 0.5
-});
-
-// 2. منطق تقليل الإطارات (Frame Throttling)
-let lastFrameTime = 0;
-const targetFPS = 15; // 15 إطار في الثانية كافية جداً للعلاج الطبيعي وسلسة جداً
-
-async function onFrame() {
-    const now = performance.now();
-    if (now - lastFrameTime < (1000 / targetFPS)) {
-        requestAnimationFrame(onFrame);
-        return;
-    }
-    lastFrameTime = now;
-    await pose.send({image: videoElement});
-    requestAnimationFrame(onFrame);
-}
-
-// 3. تعديل حجم الكاميرا
-function initAI() {
-    const camera = new Camera(videoElement, {
-        onFrame: async () => {
-            // استدعاء دالة المعالجة المحسنة
-            await pose.send({image: videoElement});
-        },
-        width: 320, // تصغير الحجم يجعل المعالجة لحظية
-        height: 240
-    });
-    camera.start();
-}
-
-        // تصحيح المتحسس الجانبي: نتحقق من الجانب الظاهر للكاميرا (يمين أو يسار)
-        // إذا كانت النقطة 12 (كتف) أوضح من 11، نستخدم الجانب الأيمن، والعكس.
+        // اختيار الجانب الأوضح للكاميرا
         const side = lm[12].visibility > lm[11].visibility ? {s:12, h:24, k:26} : {s:11, h:23, k:25};
+        const ang = calculateAngle(lm[side.s], lm[side.h], lm[side.k]);
         
-        let ang = calculateAngle(lm[side.s], lm[side.h], lm[side.k]);
-        document.getElementById('acc').innerText = Math.round(ang) + "°";
+        document.getElementById('angle').innerText = Math.round(ang) + "°";
+        const hud = document.getElementById('hud');
 
-        if (userCondition === 'disc' && ang < 145) {
-            hud.innerText = "🚨 خطأ: لا تنحنِ للأمام! حافظ على استقامة الظهر";
-            hud.style.color = "red";
-            mistakes++;
-        } else {
-            hud.innerText = "أداء سليم - واصل التمرين ✅";
-            hud.style.color = "#38bdf8";
-            // منطق العداد
-            if (ang > 170) stage = "down";
-            if (ang < 160 && stage === "down") { stage = "up"; counter++; document.getElementById('count').innerText = counter; }
+        if (condition === 'disc') {
+            if (ang < 150) {
+                hud.innerText = "🚨 تحذير: تجنب الانحناء للأمام!";
+                hud.style.color = "var(--danger)";
+            } else {
+                hud.innerText = "وضعية سليمة ✅";
+                hud.style.color = "var(--accent)";
+                if (ang > 175) stage = "down";
+                if (ang < 165 && stage === "down") { counter++; stage = "up"; }
+            }
         }
+        document.getElementById('count').innerText = counter;
     });
-
-    function showFeedback() {
-        const content = document.getElementById('feedback-content');
-        const score = counter > 0 ? Math.round(((counter - mistakes/10) / counter) * 100) : 0;
-        content.innerHTML = `
-            <p><b>عدد التكرارات الصحيحة:</b> ${counter}</p>
-            <p><b>عدد الأخطاء المرصودة:</b> ${mistakes}</p>
-            <p><b>نسبة دقة الأداء:</b> ${Math.max(score, 0)}%</p>
-            <hr>
-            <p style="color:var(--accent)"><b>نصيحة الأخصائي الذكي:</b> ${protocols[userCondition].tips}</p>
-        `;
-        nav('p-feed');
-    }
 
     function calculateAngle(a, b, c) {
         let r = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
@@ -208,10 +228,17 @@ function initAI() {
     const canvasCtx = canvasElement.getContext('2d');
 
     function initAI() {
-        new Camera(videoElement, {
-            onFrame: async () => { await pose.send({image: videoElement}); },
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                const now = performance.now();
+                if (now - lastFrameTime > 66) { 
+                    await pose.send({image: videoElement});
+                    lastFrameTime = now;
+                }
+            },
             width: 480, height: 360
-        }).start();
+        });
+        camera.start();
     }
 </script>
 </body>
