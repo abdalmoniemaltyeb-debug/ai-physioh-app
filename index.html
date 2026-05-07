@@ -126,6 +126,43 @@
         
         const lm = res.poseLandmarks;
         const hud = document.getElementById('hud');
+        // 1. إعدادات السرعة القصوى لـ Mediapipe
+const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+
+pose.setOptions({
+    modelComplexity: 0,       // 0 هو الأسرع (Lite Model)
+    smoothLandmarks: false,   // إيقاف التنعيم يقلل العمليات الحسابية
+    minDetectionConfidence: 0.5,
+    minTrackingConfidence: 0.5
+});
+
+// 2. منطق تقليل الإطارات (Frame Throttling)
+let lastFrameTime = 0;
+const targetFPS = 15; // 15 إطار في الثانية كافية جداً للعلاج الطبيعي وسلسة جداً
+
+async function onFrame() {
+    const now = performance.now();
+    if (now - lastFrameTime < (1000 / targetFPS)) {
+        requestAnimationFrame(onFrame);
+        return;
+    }
+    lastFrameTime = now;
+    await pose.send({image: videoElement});
+    requestAnimationFrame(onFrame);
+}
+
+// 3. تعديل حجم الكاميرا
+function initAI() {
+    const camera = new Camera(videoElement, {
+        onFrame: async () => {
+            // استدعاء دالة المعالجة المحسنة
+            await pose.send({image: videoElement});
+        },
+        width: 320, // تصغير الحجم يجعل المعالجة لحظية
+        height: 240
+    });
+    camera.start();
+}
 
         // تصحيح المتحسس الجانبي: نتحقق من الجانب الظاهر للكاميرا (يمين أو يسار)
         // إذا كانت النقطة 12 (كتف) أوضح من 11، نستخدم الجانب الأيمن، والعكس.
