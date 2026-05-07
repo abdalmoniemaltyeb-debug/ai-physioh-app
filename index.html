@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>AI Physiotherapy</title>
+
+  <style>
+    body{
+      font-family:Arial;
+      background:#f4f7fb;
+      text-align:center;
+      margin:0;
+    }
+
+    header{
+      background:#1f4e79;
+      color:white;
+      padding:20px;
+    }
+
+    .card{
+      background:white;
+      margin:20px auto;
+      padding:20px;
+      width:90%;
+      max-width:500px;
+      border-radius:15px;
+      box-shadow:0 0 10px rgba(0,0,0,0.1);
+    }
+
+    button{
+      background:#1f4e79;
+      color:white;
+      border:none;
+      padding:15px 25px;
+      border-radius:10px;
+      font-size:18px;
+    }
+
+    video{
+      width:100%;
+      margin-top:20px;
+      border-radius:15px;
+    }
+  </style>
+</head>
+
+<body>
+
+<header>
+  <h1>💪 AI Physiotherapy Monitoring System</h1>
+  <p>Smart Home Exercise Tracking</p>
+</header>
+
+<div class="card">
+  <h2>📖 About</h2>
+  <p>
+    AI system for monitoring physiotherapy exercises at home.
+  </p>
+</div>
+
+<div class="card">
+  <h2>📷 Camera</h2>
+
+  <button onclick="startCamera()">
+    Start Camera
+  </button>
+
+  <video id="video" autoplay playsinline></video>
+</div>
+
+<script>
+async function startCamera() {
+
+  const video = document.getElementById("video");
+
+  try {
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      video:true
+    });
+
+    video.srcObject = stream;
+
+  } catch(err) {
+
+    alert("Camera access denied");
+
+  }
+
+}
+</script>
+
+</body>
+</html>
