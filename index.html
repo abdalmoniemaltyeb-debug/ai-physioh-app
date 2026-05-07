@@ -1,56 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AI Physiotherapy</title>
+  <title>AI Physio AI Tracking</title>
 
   <style>
-    body{
-      font-family:Arial;
-      background:#f4f7fb;
-      text-align:center;
-      margin:0;
+    body {
+      font-family: Arial;
+      text-align: center;
+      margin: 0;
+      background: #f4f7fb;
     }
 
-    header{
-      background:#1f4e79;
-      color:white;
-      padding:20px;
+    header {
+      background: #1f4e79;
+      color: white;
+      padding: 15px;
     }
 
-    .card{
-      background:white;
-      margin:20px auto;
-      padding:20px;
-      width:90%;
-      max-width:600px;
-      border-radius:15px;
-      box-shadow:0 0 10px rgba(0,0,0,0.1);
+    video, canvas {
+      width: 90%;
+      max-width: 600px;
+      margin-top: 10px;
+      border-radius: 10px;
     }
 
-    button{
-      background:#1f4e79;
-      color:white;
-      border:none;
-      padding:15px 25px;
-      border-radius:10px;
-      font-size:18px;
-      cursor:pointer;
-    }
-
-    video, canvas{
-      width:100%;
-      margin-top:20px;
-      border-radius:15px;
-    }
-
-    canvas{
-      position:absolute;
-      left:0;
-      top:0;
-    }
-
-    .video-container{
-      position:relative;
+    .container {
+      position: relative;
+      display: inline-block;
     }
   </style>
 </head>
@@ -58,22 +34,17 @@
 <body>
 
 <header>
-  <h1>💪 AI Physiotherapy Monitoring System</h1>
-  <p>Real-time Body Analysis</p>
+  <h2>💪 AI Physiotherapy Pose Detection</h2>
 </header>
 
-<div class="card">
-  <h2>📷 AI Camera Tracking</h2>
+<button onclick="startCamera()">Start AI Camera</button>
 
-  <button onclick="startCamera()">Start AI Camera</button>
-
-  <div class="video-container">
-    <video id="video" autoplay playsinline></video>
-    <canvas id="canvas"></canvas>
-  </div>
+<div class="container">
+  <video id="video" autoplay playsinline></video>
+  <canvas id="canvas"></canvas>
 </div>
 
-<!-- MediaPipe AI -->
+<!-- MediaPipe -->
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
@@ -81,15 +52,17 @@
 <script>
 let videoElement = document.getElementById("video");
 let canvasElement = document.getElementById("canvas");
-let canvasCtx = canvasElement.getContext("2d");
+let ctx = canvasElement.getContext("2d");
 
 async function startCamera() {
 
-  const stream = await navigator.mediaDevices.getUserMedia({
-    video:true
-  });
-
+  const stream = await navigator.mediaDevices.getUserMedia({ video: true });
   videoElement.srcObject = stream;
+
+  videoElement.onloadedmetadata = () => {
+    canvasElement.width = videoElement.videoWidth;
+    canvasElement.height = videoElement.videoHeight;
+  };
 
   const pose = new Pose.Pose({
     locateFile: (file) => {
@@ -108,7 +81,7 @@ async function startCamera() {
 
   const camera = new Camera(videoElement, {
     onFrame: async () => {
-      await pose.send({image: videoElement});
+      await pose.send({ image: videoElement });
     },
     width: 640,
     height: 480
@@ -119,23 +92,13 @@ async function startCamera() {
 
 function onResults(results) {
 
-  canvasElement.width = videoElement.videoWidth;
-  canvasElement.height = videoElement.videoHeight;
-
-  canvasCtx.save();
-  canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-  canvasCtx.drawImage(results.image, 0, 0,
-    canvasElement.width,
-    canvasElement.height
-  );
+  ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+  ctx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
 
   if (results.poseLandmarks) {
-    drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS);
-    drawLandmarks(canvasCtx, results.poseLandmarks);
+    drawConnectors(ctx, results.poseLandmarks, POSE_CONNECTIONS, { color: 'green' });
+    drawLandmarks(ctx, results.poseLandmarks, { color: 'red' });
   }
-
-  canvasCtx.restore();
 }
 </script>
 
