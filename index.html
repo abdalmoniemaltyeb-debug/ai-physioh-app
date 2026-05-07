@@ -2,118 +2,163 @@
 <html lang="ar" dir="rtl">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-Spine Pro | نظام تأهيل الظهر الاحترافي</title>
-    
+    <title>AI-Spine Medical Platform | منصة تأهيل الظهر المتكاملة</title>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
-
     <style>
-        :root { --primary: #0f172a; --accent: #38bdf8; --danger: #f43f5e; --success: #10b981; }
-        body { font-family: 'Segoe UI', sans-serif; background: var(--primary); color: white; margin: 0; padding: 15px; }
-        .page { display: none; animation: fadeIn 0.3s; }
+        :root { --primary: #0f172a; --accent: #38bdf8; --success: #10b981; --danger: #f43f5e; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--primary); color: white; margin: 0; padding: 15px; }
+        .page { display: none; max-width: 800px; margin: auto; animation: fadeIn 0.4s; }
         .active { display: block; }
-        .card { background: #1e293b; padding: 20px; border-radius: 20px; border: 1px solid #334155; margin-bottom: 15px; }
-        button { background: var(--accent); color: var(--primary); border: none; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
-        .video-box { position: relative; width: 100%; border-radius: 15px; overflow: hidden; background: #000; }
-        #video-input { width: 100%; height: auto; transform: scaleX(-1); }
+        .card { background: #1e293b; padding: 25px; border-radius: 20px; border: 1px solid #334155; margin-bottom: 20px; }
+        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; background: #0f172a; color: white; border: 1px solid #475569; }
+        button { background: var(--accent); color: var(--primary); border: none; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; }
+        .video-box { position: relative; border-radius: 20px; overflow: hidden; background: #000; line-height: 0; }
+        #video-input { width: 100%; height: auto; transform: scaleX(-1); } /* مراة */
         #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        .hud { position: absolute; top: 10px; width: 90%; left: 5%; background: rgba(15, 23, 42, 0.9); padding: 10px; border-radius: 10px; border: 1px solid var(--accent); text-align: center; font-size: 0.9rem; }
-        .lib-item { background: #334155; padding: 12px; border-radius: 10px; margin-bottom: 10px; border-right: 4px solid var(--accent); }
+        .hud { position: absolute; top: 15px; width: 90%; left: 5%; background: rgba(15, 23, 42, 0.9); padding: 10px; border-radius: 10px; border: 1px solid var(--accent); text-align: center; }
+        .report-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
 
-<div id="p1" class="page active">
-    <div class="card">
-        <h2>🛡️ تشخيص حالة الظهر</h2>
-        <select id="back-type" style="width:100%; padding:12px; border-radius:10px; margin-bottom:15px;">
-            <option value="disc">انزلاق غضروفي (Disc)</option>
-            <option value="stenosis">تضيق القناة (Stenosis)</option>
-            <option value="sciatica">عرق النسا (Sciatica)</option>
-            <option value="strain">شد عضلي (Strain)</option>
-        </select>
-        <button onclick="showLibrary()">عرض المرجع والخطة ←</button>
+<div class="container">
+    <div id="p-diag" class="page active">
+        <div class="card">
+            <h2>📝 شيت تقييم حالة الظهر</h2>
+            <p>أجب عن الأسئلة التالية ليقوم النظام بتحديد بروتوكولك العلاجي:</p>
+            <label>أين يتركز الألم الأكبر؟</label>
+            <select id="q1">
+                <option value="back">أسفل الظهر فقط</option>
+                <option value="leg">يمتد للأرجل (عرق نسا)</option>
+            </select>
+            <label>متى يزداد الألم؟</label>
+            <select id="q2">
+                <option value="flex">عند الانحناء للأمام</option>
+                <option value="ext">عند الوقوف أو فرد الظهر</option>
+            </select>
+            <label>هل تشعر بتنميل أو خدر؟</label>
+            <select id="q3">
+                <option value="yes">نعم</option>
+                <option value="no">لا</option>
+            </select>
+            <button onclick="analyzeCondition()">تحليل الحالة وتحديد التمارين ←</button>
+        </div>
     </div>
-</div>
 
-<div id="p2" class="page">
-    <div class="card">
-        <h2 id="lib-title">📚 المرجع التعليمي</h2>
-        <div id="ex-list"></div>
-        <p style="color:var(--accent); font-size:0.8rem;">* تأكد من الوقوف بشكل جانبي للكاميرا لتحليل دقيق.</p>
-        <button onclick="startAI()">ابدأ المراقبة الحية 🎥</button>
+    <div id="p-lib" class="page">
+        <div class="card">
+            <h2 id="diag-result">النتيجة: انزلاق غضروفي</h2>
+            <div id="exercise-list"></div>
+            <button onclick="startExercise()">ابدأ التمرين الحي 🎥</button>
+        </div>
     </div>
-</div>
 
-<div id="p3" class="page">
-    <div class="video-box">
-        <div id="hud" class="hud">جاري المعايرة الجانبية...</div>
-        <video id="video-input"></video>
-        <canvas id="output-canvas"></canvas>
+    <div id="p-run" class="page">
+        <div class="video-box">
+            <div id="hud" class="hud">جاري تحليل الوضعية الجانبية...</div>
+            <video id="video-input"></video>
+            <canvas id="output-canvas"></canvas>
+        </div>
+        <div class="report-grid">
+            <div class="card" style="text-align:center">العداد: <b id="count">0</b></div>
+            <div class="card" style="text-align:center">الدقة: <b id="acc">100%</b></div>
+        </div>
+        <button style="background:var(--danger)" onclick="showFeedback()">إنهاء وجلب التقرير</button>
     </div>
-    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
-        <div class="card" style="padding:10px; text-align:center;">العداد: <b id="count">0</b></div>
-        <div class="card" style="padding:10px; text-align:center;">الزاوية: <b id="angle">0°</b></div>
+
+    <div id="p-feed" class="page">
+        <div class="card">
+            <h2>📊 تقرير أداء الجلسة</h2>
+            <div id="feedback-content" style="line-height: 1.8;"></div>
+            <button onclick="location.reload()">جلسة جديدة</button>
+        </div>
     </div>
-    <button style="background:var(--danger);" onclick="location.reload()">إنهاء</button>
 </div>
 
 <script>
-    const exercises = {
-        'disc': [{n:'McKenzie Extension', d:'فرد الظهر للخلف لتخفيف الضغط.'}, {n:'Prone Prop Up', d:'الاستلقاء على البطن مع رفع الصدر.'}],
-        'stenosis': [{n:'Pelvic Tilt', d:'تقليل تقوس الظهر لتوسيع القناة.'}, {n:'Knees to Chest', d:'ضم الركب للصدر لراحة الأعصاب.'}],
-        'sciatica': [{n:'Nerve Gliding', d:'تحريك العصب بلطف لفك الالتصاقات.'}, {n:'Hamstring Stretch', d:'إطالة عضلات الفخذ الخلفية.'}]
+    let userCondition = '';
+    let counter = 0;
+    let mistakes = 0;
+
+    const protocols = {
+        'disc': { 
+            title: 'بروتوكول الانزلاق الغضروفي', 
+            exercises: ['McKenzie Extension', 'Superman Pose', 'Prone Cobra'],
+            tips: 'ركز على فرد الظهر وتجنب الانحناء الأمامي.' 
+        },
+        'stenosis': { 
+            title: 'بروتوكول تضيق القناة', 
+            exercises: ['Pelvic Tilts', 'Knee to Chest', 'Child Pose'],
+            tips: 'تمارين الثني تريح القناة العصبية.' 
+        }
     };
 
-    let mode = ''; let count = 0; let stage = null;
-
-    function showLibrary() {
-        mode = document.getElementById('back-type').value;
-        const list = document.getElementById('ex-list');
-        list.innerHTML = '';
-        (exercises[mode] || exercises['disc']).forEach(ex => {
-            list.innerHTML += `<div class="lib-item"><b>${ex.n}</b><br><small>${ex.d}</small></div>`;
-        });
+    function nav(id) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById('p2').classList.add('active');
+        document.getElementById(id).classList.add('active');
     }
 
-    function startAI() {
-        document.getElementById('p2').classList.remove('active');
-        document.getElementById('p3').classList.add('active');
-        initPose();
+    function analyzeCondition() {
+        const q1 = document.getElementById('q1').value;
+        const q2 = document.getElementById('q2').value;
+        
+        // منطق التحديد التلقائي
+        userCondition = (q2 === 'flex') ? 'disc' : 'stenosis';
+        
+        document.getElementById('diag-result').innerText = protocols[userCondition].title;
+        const list = document.getElementById('exercise-list');
+        list.innerHTML = protocols[userCondition].exercises.map(ex => `<div style="background:#334155; padding:10px; margin:5px 0; border-radius:10px;">✅ ${ex}</div>`).join('');
+        nav('p-lib');
     }
+
+    function startExercise() { nav('p-run'); initAI(); }
 
     const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
-    pose.setOptions({ modelComplexity: 0, smoothLandmarks: false, minDetectionConfidence: 0.5 }); // إعدادات السرعة القصوى
+    pose.setOptions({modelComplexity: 0, minDetectionConfidence: 0.5});
 
     pose.onResults((res) => {
         if (!res.poseLandmarks) return;
-        canvasCtx.save();
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
         drawConnectors(canvasCtx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#38bdf8', lineWidth: 2});
         
         const lm = res.poseLandmarks;
         const hud = document.getElementById('hud');
-        // تحليل جانبي (كتف 12 - حوض 24 - ركبة 26)
-        let ang = calculateAngle(lm[12], lm[24], lm[26]);
-        document.getElementById('angle').innerText = Math.round(ang) + "°";
 
-        if (mode === 'disc') {
-            if (ang < 150) { 
-                hud.innerText = "🚨 انحناء خطر للأمام!"; hud.style.color = "red"; 
-            } else { 
-                hud.innerText = "وضعية ممتازة للديسك ✅"; hud.style.color = "#38bdf8";
-                if (ang > 170) stage = "down";
-                if (ang < 160 && stage === "down") { stage = "up"; count++; }
-            }
+        // تصحيح المتحسس الجانبي: نتحقق من الجانب الظاهر للكاميرا (يمين أو يسار)
+        // إذا كانت النقطة 12 (كتف) أوضح من 11، نستخدم الجانب الأيمن، والعكس.
+        const side = lm[12].visibility > lm[11].visibility ? {s:12, h:24, k:26} : {s:11, h:23, k:25};
+        
+        let ang = calculateAngle(lm[side.s], lm[side.h], lm[side.k]);
+        document.getElementById('acc').innerText = Math.round(ang) + "°";
+
+        if (userCondition === 'disc' && ang < 145) {
+            hud.innerText = "🚨 خطأ: لا تنحنِ للأمام! حافظ على استقامة الظهر";
+            hud.style.color = "red";
+            mistakes++;
+        } else {
+            hud.innerText = "أداء سليم - واصل التمرين ✅";
+            hud.style.color = "#38bdf8";
+            // منطق العداد
+            if (ang > 170) stage = "down";
+            if (ang < 160 && stage === "down") { stage = "up"; counter++; document.getElementById('count').innerText = counter; }
         }
-        document.getElementById('count').innerText = count;
-        canvasCtx.restore();
     });
+
+    function showFeedback() {
+        const content = document.getElementById('feedback-content');
+        const score = counter > 0 ? Math.round(((counter - mistakes/10) / counter) * 100) : 0;
+        content.innerHTML = `
+            <p><b>عدد التكرارات الصحيحة:</b> ${counter}</p>
+            <p><b>عدد الأخطاء المرصودة:</b> ${mistakes}</p>
+            <p><b>نسبة دقة الأداء:</b> ${Math.max(score, 0)}%</p>
+            <hr>
+            <p style="color:var(--accent)"><b>نصيحة الأخصائي الذكي:</b> ${protocols[userCondition].tips}</p>
+        `;
+        nav('p-feed');
+    }
 
     function calculateAngle(a, b, c) {
         let r = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
@@ -125,24 +170,12 @@
     const canvasElement = document.getElementById('output-canvas');
     const canvasCtx = canvasElement.getContext('2d');
 
-    function initPose() {
+    function initAI() {
         new Camera(videoElement, {
             onFrame: async () => { await pose.send({image: videoElement}); },
-            width: 480, height: 360 // تقليل الجودة لزيادة السرعة
-        }).start();
-    }async function initPose() {
-    try {
-        const cam = new Camera(videoElement, {
-            onFrame: async () => { await pose.send({image: videoElement}); },
             width: 480, height: 360
-        });
-        await cam.start();
-        console.log("Camera started successfully");
-    } catch (err) {
-        alert("خطأ في فتح الكاميرا: " + err.message);
+        }).start();
     }
-}
-
 </script>
 </body>
 </html>
