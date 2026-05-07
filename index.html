@@ -3,8 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Physio Pro - Web Version</title>
+    <title>AI Physio Pro - Web System</title>
+    
     <script src="https://cdn.tailwindcss.com"></script>
+    
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
@@ -12,50 +14,51 @@
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
         body { font-family: 'Tajawal', sans-serif; background-color: #0f172a; color: white; }
-        .canvas-container { position: relative; width: 100%; max-width: 800px; margin: auto; border-radius: 20px; overflow: hidden; border: 4px solid #1e293b; }
-        canvas { width: 100%; height: auto; }
-        video { display: none; }
+        .video-container { position: relative; width: 100%; max-width: 720px; border-radius: 24px; overflow: hidden; border: 4px solid #1e293b; background: black; }
+        #output_canvas { width: 100%; height: auto; transform: scaleX(-1); }
+        #input_video { display: none; }
     </style>
 </head>
-<body class="p-4 md:p-8">
+<body class="min-h-screen p-4 md:p-8 flex flex-col items-center">
 
-    <header class="text-center mb-8">
-        <h1 class="text-4xl font-bold text-blue-400">AI Physio Pro</h1>
-        <p class="text-gray-400 mt-2">نظام التأهيل المنزلي الذكي</p>
+    <header class="text-center mb-10">
+        <h1 class="text-4xl font-bold text-blue-400 italic">AI Physio <span class="text-white">Pro</span></h1>
+        <p class="text-slate-400 mt-2 text-lg">نظام التأهيل الذكي القائم على رؤية الكمبيوتر</p>
     </header>
 
-    <main class="max-w-6xl mx-auto grid lg:grid-cols-3 gap-8">
+    <main class="w-full max-w-6xl grid lg:grid-cols-3 gap-8">
         
-        <div class="lg:col-span-2">
-            <div class="canvas-container shadow-2xl">
+        <div class="lg:col-span-2 flex flex-col items-center">
+            <div class="video-container shadow-2xl shadow-blue-500/10">
                 <canvas id="output_canvas"></canvas>
                 <video id="input_video"></video>
             </div>
             
-            <div class="flex gap-4 mt-6">
-                <button onclick="changeExercise('elbow')" class="flex-1 bg-blue-600 hover:bg-blue-700 p-4 rounded-xl font-bold transition">تمرين الكوع</button>
-                <button onclick="changeExercise('shoulder')" class="flex-1 bg-slate-700 hover:bg-slate-600 p-4 rounded-xl font-bold transition">تمرين الكتف</button>
+            <div class="grid grid-cols-2 gap-4 w-full mt-6">
+                <button onclick="setExercise('elbow')" class="bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">تمرين الكوع</button>
+                <button onclick="setExercise('shoulder')" class="bg-slate-700 hover:bg-slate-600 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">تمرين الكتف</button>
             </div>
         </div>
 
         <div class="space-y-6">
-            <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl">
-                <h2 class="text-xl font-bold mb-4 text-blue-300 text-center">العداد الرقمي</h2>
-                <div class="text-center">
-                    <span id="counter" class="text-8xl font-black text-white">0</span>
+            <div class="bg-slate-800 p-8 rounded-[2rem] border border-slate-700 text-center shadow-xl">
+                <h3 class="text-slate-400 font-bold mb-2">التكرارات</h3>
+                <span id="counter" class="text-9xl font-black text-white">0</span>
+            </div>
+
+            <div class="bg-slate-800 p-6 rounded-[2rem] border border-slate-700 space-y-4">
+                <div class="flex justify-between items-center border-b border-slate-700 pb-4">
+                    <span class="text-slate-400">الزاوية الحالية:</span>
+                    <span id="angle_text" class="text-2xl font-bold text-yellow-400">0°</span>
+                </div>
+                <div class="text-center py-2">
+                    <p id="feedback" class="text-xl font-bold text-blue-300">جاهز للبدء</p>
                 </div>
             </div>
 
-            <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700">
-                <h3 class="text-lg font-bold mb-2">زاوية المفصل الحالية</h3>
-                <div id="angle_display" class="text-3xl font-bold text-yellow-400">0°</div>
-            </div>
-
-            <div id="feedback_box" class="bg-blue-900/30 p-6 rounded-3xl border border-blue-500/50 text-center">
-                <p id="feedback_text" class="text-xl font-bold">جاهز للبدء...</p>
-            </div>
-
-            <button onclick="downloadReport()" class="w-full bg-green-600 hover:bg-green-700 p-4 rounded-xl font-bold shadow-lg transition">تصدير تقرير الجلسة (CSV)</button>
+            <button onclick="exportCSV()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-5 rounded-2xl font-bold shadow-lg transition-all flex justify-center items-center gap-2">
+                <span>📥</span> تصدير تقرير الجلسة
+            </button>
         </div>
     </main>
 
@@ -66,30 +69,35 @@
         
         let counter = 0;
         let stage = "down";
-        let currentExercise = "elbow";
-        let history = [];
+        let currentEx = "elbow";
+        let sessionData = [];
 
+        // محرك نطق بسيط للمتصفح
         function speak(text) {
-            const msg = new SpeechSynthesisUtterance(text);
-            msg.lang = 'ar-SA';
-            window.speechSynthesis.speak(msg);
+            const utterance = new SpeechSynthesisUtterance(text);
+            utterance.lang = 'ar-SA';
+            window.speechSynthesis.speak(utterance);
         }
 
-        function changeExercise(ex) {
-            currentExercise = ex;
+        function setExercise(ex) {
+            currentEx = ex;
             counter = 0;
-            document.getElementById('counter').innerText = counter;
+            document.getElementById('counter').innerText = "0";
             speak("تم تغيير التمرين");
         }
 
         function calculateAngle(A, B, C) {
-            let radians = Math.atan2(C.y - B.y, C.x - B.x) - Math.atan2(A.y - B.y, A.x - B.x);
-            let angle = Math.abs(radians * 180.0 / Math.PI);
+            let rad = Math.atan2(C.y - B.y, C.x - B.x) - Math.atan2(A.y - B.y, A.x - B.x);
+            let angle = Math.abs(rad * 180.0 / Math.PI);
             if (angle > 180.0) angle = 360 - angle;
             return angle;
         }
 
         function onResults(results) {
+            // إعداد أبعاد الكانفاس
+            canvasElement.width = videoElement.videoWidth;
+            canvasElement.height = videoElement.videoHeight;
+
             canvasCtx.save();
             canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
             canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
@@ -97,20 +105,20 @@
             if (results.poseLandmarks) {
                 const landmarks = results.poseLandmarks;
                 
-                // تحديد النقاط
-                const shoulder = landmarks[12]; // الكتف الأيمن
-                const elbow = landmarks[14];    // الكوع الأيمن
-                const wrist = landmarks[16];    // الرسغ الأيمن
-                const hip = landmarks[24];      // الحوض الأيمن
+                // تحديد النقاط (Right Side)
+                const shoulder = landmarks[12];
+                const elbow = landmarks[14];
+                const wrist = landmarks[16];
+                const hip = landmarks[24];
 
                 let angle = 0;
-                if (currentExercise === "elbow") {
+                if (currentEx === "elbow") {
                     angle = calculateAngle(shoulder, elbow, wrist);
                 } else {
                     angle = calculateAngle(hip, shoulder, elbow);
                 }
 
-                document.getElementById('angle_display').innerText = Math.round(angle) + "°";
+                document.getElementById('angle_text').innerText = Math.round(angle) + "°";
 
                 // منطق العد
                 if (angle > 160) {
@@ -118,14 +126,14 @@
                         counter++;
                         document.getElementById('counter').innerText = counter;
                         speak(counter);
-                        history.push({time: new Date().toLocaleTimeString(), count: counter});
+                        sessionData.push({ time: new Date().toLocaleTimeString(), rep: counter });
                     }
                     stage = "down";
-                    document.getElementById('feedback_text').innerText = "حركة صحيحة ✅";
+                    document.getElementById('feedback').innerText = "حركة كاملة ✅";
                 }
                 if (angle < 40) {
                     stage = "up";
-                    document.getElementById('feedback_text').innerText = "افرد المفصل الآن";
+                    document.getElementById('feedback').innerText = "افرد المفصل الآن";
                 }
 
                 // رسم الهيكل العظمي
@@ -157,15 +165,14 @@
         });
         camera.start();
 
-        function downloadReport() {
+        function exportCSV() {
+            if (sessionData.length === 0) return alert("لا توجد بيانات لتصديرها");
             let csvContent = "data:text/csv;charset=utf-8,Time,Repetition\n";
-            history.forEach(row => {
-                csvContent += `${row.time},${row.count}\n`;
-            });
+            sessionData.forEach(row => csvContent += `${row.time},${row.rep}\n`);
             const encodedUri = encodeURI(csvContent);
             const link = document.createElement("a");
             link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "physio_report.csv");
+            link.setAttribute("download", "Physio_Report.csv");
             document.body.appendChild(link);
             link.click();
         }
