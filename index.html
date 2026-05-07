@@ -1,155 +1,174 @@
-import customtkinter as ctk
-import cv2
-import mediapipe as mp
-import numpy as np
-from PIL import Image, ImageTk
-import pandas as pd
-from datetime import datetime
-import pyttsx3
-import threading
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Physio Pro - Web Version</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
 
-# --- 1. إعدادات المحركات الخلفية ---
-engine = pyttsx3.init()
-def speak(text):
-    threading.Thread(target=lambda: (engine.say(text), engine.runAndWait())).start()
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
+        body { font-family: 'Tajawal', sans-serif; background-color: #0f172a; color: white; }
+        .canvas-container { position: relative; width: 100%; max-width: 800px; margin: auto; border-radius: 20px; overflow: hidden; border: 4px solid #1e293b; }
+        canvas { width: 100%; height: auto; }
+        video { display: none; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
 
-mp_pose = mp.solutions.pose
-pose = mp_pose.Pose(min_detection_confidence=0.7, min_tracking_confidence=0.7)
-mp_drawing = mp.solutions.drawing_utils
+    <header class="text-center mb-8">
+        <h1 class="text-4xl font-bold text-blue-400">AI Physio Pro</h1>
+        <p class="text-gray-400 mt-2">نظام التأهيل المنزلي الذكي</p>
+    </header>
 
-# --- 2. الكلاس الرئيسي للتطبيق ---
-class SmartPhysioFullApp(ctk.CTk):
-    def __init__(self):
-        super().__init__()
-
-        # إعدادات النافذة
-        self.title("نظام AI Physio Pro المتكامل")
-        self.geometry("1300x800")
-        ctk.set_appearance_mode("dark")
+    <main class="max-w-6xl mx-auto grid lg:grid-cols-3 gap-8">
         
-        # متغيرات التشغيل والقاعدة
-        self.counter = 0
-        self.stage = None
-        self.current_exercise = "الكوع"
-        self.history_data = [] 
-
-        # --- بناء الواجهة الرسومية ---
-        self.grid_columnconfigure(1, weight=1)
-        self.grid_rowconfigure(0, weight=1)
-
-        # الجانب الأيسر: التحكم والقائمة
-        self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=15)
-        self.sidebar.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
-        
-        ctk.CTkLabel(self.sidebar, text="العيادة الذكية", font=("Arial", 26, "bold")).pack(pady=30)
-        
-        # أزرار التمارين
-        self.btn_elbow = ctk.CTkButton(self.sidebar, text="تمرين ثني الكوع", height=45, command=lambda: self.select_ex("الكوع"))
-        self.btn_elbow.pack(pady=10, padx=20)
-        
-        self.btn_shoulder = ctk.CTkButton(self.sidebar, text="تمرين رفع الكتف", height=45, command=lambda: self.select_ex("الكتف"))
-        self.btn_shoulder.pack(pady=10, padx=20)
-
-        # زر حفظ البيانات
-        self.save_btn = ctk.CTkButton(self.sidebar, text="تصدير التقرير (Excel)", fg_color="#27ae60", hover_color="#2ecc71", command=self.export_to_excel)
-        self.save_btn.pack(side="bottom", pady=40, padx=20)
-
-        # الجانب الأيمن: الكاميرا والبيانات
-        self.main_view = ctk.CTkFrame(self, corner_radius=15, fg_color="#121212")
-        self.main_view.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
-        
-        self.video_display = ctk.CTkLabel(self.main_view, text="")
-        self.video_display.pack(expand=True, fill="both", padx=15, pady=15)
-
-        # شريط المعلومات السفلي
-        self.bottom_bar = ctk.CTkFrame(self, height=150, corner_radius=15)
-        self.bottom_bar.grid(row=1, column=0, columnspan=2, padx=20, pady=(0, 20), sticky="ew")
-        
-        self.angle_text = ctk.CTkLabel(self.bottom_bar, text="الزاوية: 0°", font=("Arial", 25))
-        self.angle_text.pack(side="left", expand=True)
-
-        self.counter_text = ctk.CTkLabel(self.bottom_bar, text="0", font=("Arial", 70, "bold"), text_color="#3498db")
-        self.counter_text.pack(side="left", expand=True)
-
-        self.status_text = ctk.CTkLabel(self.bottom_bar, text="جاهز للبدء", font=("Arial", 22), text_color="#f1c40f")
-        self.status_text.pack(side="left", expand=True)
-
-        # بدء الكاميرا
-        self.cap = cv2.VideoCapture(0)
-        self.run_ai_loop()
-
-    # --- المنطق البرمجي ---
-    def select_ex(self, ex_name):
-        self.current_exercise = ex_name
-        self.counter = 0
-        self.stage = None
-        speak(f"تم اختيار تمرين {ex_name}")
-
-    def calc_angle(self, a, b, c):
-        a, b, c = np.array(a), np.array(b), np.array(c)
-        radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
-        angle = np.abs(radians*180.0/np.pi)
-        return 360-angle if angle > 180 else angle
-
-    def export_to_excel(self):
-        if not self.history_data:
-            speak("لا توجد بيانات لحفظها")
-            return
-        df = pd.DataFrame(self.history_data, columns=['الوقت', 'نوع التمرين', 'العدة رقم'])
-        filename = f"Physio_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
-        df.to_excel(filename, index=False)
-        speak("تم حفظ التقرير")
-        self.status_text.configure(text="تم الحفظ!", text_color="green")
-
-    def run_ai_loop(self):
-        ret, frame = self.cap.read()
-        if ret:
-            # معالجة الصورة
-            frame = cv2.flip(frame, 1)
-            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            results = pose.process(image)
+        <div class="lg:col-span-2">
+            <div class="canvas-container shadow-2xl">
+                <canvas id="output_canvas"></canvas>
+                <video id="input_video"></video>
+            </div>
             
-            if results.pose_landmarks:
-                lm = results.pose_landmarks.landmark
+            <div class="flex gap-4 mt-6">
+                <button onclick="changeExercise('elbow')" class="flex-1 bg-blue-600 hover:bg-blue-700 p-4 rounded-xl font-bold transition">تمرين الكوع</button>
+                <button onclick="changeExercise('shoulder')" class="flex-1 bg-slate-700 hover:bg-slate-600 p-4 rounded-xl font-bold transition">تمرين الكتف</button>
+            </div>
+        </div>
+
+        <div class="space-y-6">
+            <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700 shadow-xl">
+                <h2 class="text-xl font-bold mb-4 text-blue-300 text-center">العداد الرقمي</h2>
+                <div class="text-center">
+                    <span id="counter" class="text-8xl font-black text-white">0</span>
+                </div>
+            </div>
+
+            <div class="bg-slate-800 p-6 rounded-3xl border border-slate-700">
+                <h3 class="text-lg font-bold mb-2">زاوية المفصل الحالية</h3>
+                <div id="angle_display" class="text-3xl font-bold text-yellow-400">0°</div>
+            </div>
+
+            <div id="feedback_box" class="bg-blue-900/30 p-6 rounded-3xl border border-blue-500/50 text-center">
+                <p id="feedback_text" class="text-xl font-bold">جاهز للبدء...</p>
+            </div>
+
+            <button onclick="downloadReport()" class="w-full bg-green-600 hover:bg-green-700 p-4 rounded-xl font-bold shadow-lg transition">تصدير تقرير الجلسة (CSV)</button>
+        </div>
+    </main>
+
+    <script>
+        const videoElement = document.getElementById('input_video');
+        const canvasElement = document.getElementById('output_canvas');
+        const canvasCtx = canvasElement.getContext('2d');
+        
+        let counter = 0;
+        let stage = "down";
+        let currentExercise = "elbow";
+        let history = [];
+
+        function speak(text) {
+            const msg = new SpeechSynthesisUtterance(text);
+            msg.lang = 'ar-SA';
+            window.speechSynthesis.speak(msg);
+        }
+
+        function changeExercise(ex) {
+            currentExercise = ex;
+            counter = 0;
+            document.getElementById('counter').innerText = counter;
+            speak("تم تغيير التمرين");
+        }
+
+        function calculateAngle(A, B, C) {
+            let radians = Math.atan2(C.y - B.y, C.x - B.x) - Math.atan2(A.y - B.y, A.x - B.x);
+            let angle = Math.abs(radians * 180.0 / Math.PI);
+            if (angle > 180.0) angle = 360 - angle;
+            return angle;
+        }
+
+        function onResults(results) {
+            canvasCtx.save();
+            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+
+            if (results.poseLandmarks) {
+                const landmarks = results.poseLandmarks;
                 
-                # جلب الإحداثيات
-                s = [lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x, lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
-                e = [lm[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x, lm[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y]
-                w = [lm[mp_pose.PoseLandmark.RIGHT_WRIST.value].x, lm[mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
-                h = [lm[mp_pose.PoseLandmark.RIGHT_HIP.value].x, lm[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
+                // تحديد النقاط
+                const shoulder = landmarks[12]; // الكتف الأيمن
+                const elbow = landmarks[14];    // الكوع الأيمن
+                const wrist = landmarks[16];    // الرسغ الأيمن
+                const hip = landmarks[24];      // الحوض الأيمن
 
-                # حساب الزاوية حسب التمرين المختار
-                if self.current_exercise == "الكوع":
-                    angle = self.calc_angle(s, e, w)
-                else: # الكتف
-                    angle = self.calc_angle(h, s, e)
+                let angle = 0;
+                if (currentExercise === "elbow") {
+                    angle = calculateAngle(shoulder, elbow, wrist);
+                } else {
+                    angle = calculateAngle(hip, shoulder, elbow);
+                }
 
-                # منطق العدّ
-                if angle > 160:
-                    if self.stage == "up":
-                        self.counter += 1
-                        speak(str(self.counter))
-                        self.history_data.append([datetime.now().strftime("%H:%M:%S"), self.current_exercise, self.counter])
-                    self.stage = "down"
-                
-                if angle < 30:
-                    self.stage = "up"
+                document.getElementById('angle_display').innerText = Math.round(angle) + "°";
 
-                # تحديث الشاشة
-                self.angle_text.configure(text=f"الزاوية: {int(angle)}°")
-                self.counter_text.configure(text=str(self.counter))
-                
-                # رسم النقاط
-                mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
+                // منطق العد
+                if (angle > 160) {
+                    if (stage === "up") {
+                        counter++;
+                        document.getElementById('counter').innerText = counter;
+                        speak(counter);
+                        history.push({time: new Date().toLocaleTimeString(), count: counter});
+                    }
+                    stage = "down";
+                    document.getElementById('feedback_text').innerText = "حركة صحيحة ✅";
+                }
+                if (angle < 40) {
+                    stage = "up";
+                    document.getElementById('feedback_text').innerText = "افرد المفصل الآن";
+                }
 
-            # عرض الصورة في الواجهة
-            img = Image.fromarray(image)
-            imgtk = ImageTk.PhotoImage(image=img)
-            self.video_display.imgtk = imgtk
-            self.video_display.configure(image=imgtk)
-            
-        self.after(10, self.run_ai_loop)
+                // رسم الهيكل العظمي
+                drawConnectors(canvasCtx, landmarks, POSE_CONNECTIONS, {color: '#3b82f6', lineWidth: 4});
+                drawLandmarks(canvasCtx, landmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
+            }
+            canvasCtx.restore();
+        }
 
-if __name__ == "__main__":
-    app = SmartPhysioFullApp()
-    app.mainloop()
+        const pose = new Pose({
+            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+        });
+
+        pose.setOptions({
+            modelComplexity: 1,
+            smoothLandmarks: true,
+            minDetectionConfidence: 0.5,
+            minTrackingConfidence: 0.5
+        });
+
+        pose.onResults(onResults);
+
+        const camera = new Camera(videoElement, {
+            onFrame: async () => {
+                await pose.send({image: videoElement});
+            },
+            width: 1280,
+            height: 720
+        });
+        camera.start();
+
+        function downloadReport() {
+            let csvContent = "data:text/csv;charset=utf-8,Time,Repetition\n";
+            history.forEach(row => {
+                csvContent += `${row.time},${row.count}\n`;
+            });
+            const encodedUri = encodeURI(csvContent);
+            const link = document.createElement("a");
+            link.setAttribute("href", encodedUri);
+            link.setAttribute("download", "physio_report.csv");
+            document.body.appendChild(link);
+            link.click();
+        }
+    </script>
+</body>
+</html>
