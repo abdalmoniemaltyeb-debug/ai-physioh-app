@@ -3,156 +3,151 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Movement Analytics - Pro</title>
+    <title>AI-PhyTrack | نظام التحليل الحركي الذكي</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
 
     <style>
-        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --danger: #f43f5e; --success: #10b981; }
-        body { font-family: 'Inter', system-ui, sans-serif; background: var(--bg); color: white; margin: 0; padding: 10px; }
-        .container { max-width: 800px; margin: auto; }
+        :root { --primary: #0f172a; --accent: #38bdf8; --success: #10b981; --danger: #f43f5e; --text: #f8fafc; }
+        body { font-family: 'Segoe UI', system-ui, sans-serif; background: var(--primary); color: var(--text); margin: 0; overflow-x: hidden; }
         
-        /* واجهة التحليل */
-        .analytics-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 15px; margin-top: 15px; }
+        .page { display: none; min-height: 100vh; padding: 20px; box-sizing: border-box; animation: fadeIn 0.4s ease; }
+        .active { display: flex; flex-direction: column; align-items: center; }
+
+        .card { background: #1e293b; padding: 30px; border-radius: 24px; width: 100%; max-width: 500px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); }
+        input, select, textarea { width: 100%; padding: 14px; margin: 10px 0; border-radius: 12px; border: 1px solid #334155; background: #0f172a; color: white; }
         
-        .video-container { position: relative; background: #000; border-radius: 20px; overflow: hidden; border: 2px solid #334155; }
-        #video-input { width: 100%; height: auto; transform: scaleX(-1); opacity: 0.8; }
+        button { background: var(--accent); color: var(--primary); border: none; padding: 16px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; transition: 0.3s; }
+        button:hover { transform: translateY(-2px); box-shadow: 0 5px 15px rgba(56, 189, 248, 0.4); }
+
+        /* واجهة المراقبة */
+        .video-box { position: relative; width: 100%; max-width: 640px; border-radius: 20px; overflow: hidden; border: 2px solid #334155; }
+        #video-input { width: 100%; height: auto; transform: scaleX(-1); }
         #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-        .sidebar { display: flex; flex-direction: column; gap: 15px; }
-        .stat-card { background: var(--card); padding: 15px; border-radius: 15px; border-left: 5px solid var(--accent); }
-        .stat-val { font-size: 2rem; font-weight: 800; display: block; color: var(--accent); }
+        .hud-overlay { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.85); padding: 8px 20px; border-radius: 50px; border: 1px solid var(--accent); font-size: 0.9rem; white-space: nowrap; }
+        .error-border { border-color: var(--danger) !important; color: var(--danger); }
 
-        /* شريط التغذية الراجعة الذكي */
-        #feedback-hud { 
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            padding: 10px 25px; border-radius: 50px; font-weight: bold;
-            background: rgba(15, 23, 42, 0.8); backdrop-filter: blur(10px);
-            border: 1px solid var(--accent); white-space: nowrap; transition: 0.3s;
-        }
-
-        .warning { border-color: var(--danger) !important; color: var(--danger); animation: shake 0.5s; }
+        .stats-row { display: flex; gap: 10px; width: 100%; max-width: 640px; margin-top: 15px; }
+        .stat-item { flex: 1; background: #1e293b; padding: 15px; border-radius: 15px; text-align: center; border-bottom: 4px solid var(--accent); }
         
-        @keyframes shake { 0%, 100% { transform: translateX(-50%); } 25% { transform: translateX(-55%); } 75% { transform: translateX(-45%); } }
-
-        /* شريط التقدم */
-        .progress-bar { width: 100%; height: 10px; background: #334155; border-radius: 10px; margin-top: 20px; overflow: hidden; }
-        #progress-fill { width: 0%; height: 100%; background: var(--success); transition: 0.3s; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div style="text-align: right; padding: 10px;">
-        <h1 style="margin:0; font-size: 1.5rem;">📊 Movement Analytics <span style="color:var(--accent)">3D Pro</span></h1>
-        <p style="color: #94a3b8; font-size: 0.9rem;">نظام تحليل المسار الحركي المدعوم بالذكاء الاصطناعي</p>
+<div id="p1" class="page active">
+    <div class="card">
+        <h2 style="color: var(--accent)">📋 ملف الحالة</h2>
+        <p>أدخل بيانات المريض لبدء التحليل الحركي</p>
+        <input type="text" id="name" placeholder="الاسم الكامل">
+        <select id="diag">
+            <option value="">نوع الإصابة</option>
+            <option value="ACL">تأهيل رباط صليبي</option>
+            <option value="Stroke">تأهيل جلطة دماغية</option>
+            <option value="Shoulder">إصابة وتر الكتف</option>
+        </select>
+        <button onclick="nav('p2')">متابعة الأقسام ←</button>
     </div>
+</div>
 
-    <div class="video-container">
-        <div id="feedback-hud">جاري معايرة الحساسات...</div>
+<div id="p2" class="page">
+    <h2 style="margin-bottom:30px;">🎯 اختر البروتوكول العلاجي</h2>
+    <div style="display: grid; grid-template-columns: 1fr 1fr; gap:15px; width:100%; max-width:500px;">
+        <button onclick="startEx('arm')">💪 الطرف العلوي</button>
+        <button onclick="startEx('leg')">🦵 الطرف السفلي</button>
+        <button onclick="startEx('back')">🧘 استقامة الظهر</button>
+        <button style="background:#475569;" onclick="nav('p1')">رجوع</button>
+    </div>
+</div>
+
+<div id="p3" class="page">
+    <div class="video-box">
+        <div id="hud" class="hud-overlay">جاري المعايرة...</div>
         <video id="video-input"></video>
         <canvas id="output-canvas"></canvas>
     </div>
-
-    <div class="analytics-grid">
-        <div class="sidebar">
-            <div class="stat-card">
-                <span style="font-size: 0.8rem;">دقة المسار (Accuracy)</span>
-                <span id="accuracy-val" class="stat-val">0%</span>
-            </div>
-            <div class="stat-card">
-                <span style="font-size: 0.8rem;">الزاوية (Angle)</span>
-                <span id="angle-val" class="stat-val">0°</span>
-            </div>
-        </div>
-        <div class="sidebar">
-            <div class="stat-card" style="border-color: var(--success);">
-                <span style="font-size: 0.8rem;">التكرارات</span>
-                <span id="counter" class="stat-val">0</span>
-            </div>
-            <button onclick="location.reload()" style="background:var(--danger); color:white; border:none; padding:15px; border-radius:15px; cursor:pointer;">إعادة تعيين</button>
-        </div>
+    
+    <div class="stats-row">
+        <div class="stat-item">العداد: <br><span id="count" style="font-size:1.5rem; font-weight:bold;">0</span></div>
+        <div class="stat-item">الزاوية: <br><span id="ang" style="font-size:1.5rem; font-weight:bold;">0°</span></div>
+        <div class="stat-item">الدقة: <br><span id="acc" style="font-size:1.5rem; font-weight:bold; color:var(--success);">100%</span></div>
     </div>
-
-    <div class="progress-bar"><div id="progress-fill"></div></div>
+    <button style="background:var(--danger); margin-top:20px; max-width:200px;" onclick="location.reload()">إنهاء الجلسة</button>
 </div>
 
 <script>
+    function nav(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
+
+    let mode = ''; let count = 0; let stage = null;
+
+    function startEx(m) { mode = m; nav('p3'); initPose(); }
+
+    function getAngle(a, b, c) {
+        let r = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
+        let ang = Math.abs(r * 180 / Math.PI);
+        return ang > 180 ? 360 - ang : ang;
+    }
+
+    const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+    pose.setOptions({modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.6});
+
+    pose.onResults((res) => {
+        if (!res.poseLandmarks) return;
+        const ctx = canvasCtx;
+        ctx.save();
+        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        drawConnectors(ctx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#38bdf8', lineWidth: 3});
+        
+        const lm = res.poseLandmarks;
+        const hud = document.getElementById('hud');
+        let ang = 0;
+
+        // 1. فحص استقامة الجسم (مستوحى من PubMed)
+        let alignment = Math.abs(lm[11].y - lm[12].y);
+        if (alignment > 0.05) {
+            hud.innerText = "⚠️ تحذير: الكتفين غير متوازيين!";
+            hud.classList.add('error-border');
+            document.getElementById('acc').innerText = "تدني دقة";
+        } else {
+            hud.classList.remove('error-border');
+            document.getElementById('acc').innerText = "ممتازة";
+
+            // 2. منطق التمارين
+            if (mode === 'arm') {
+                ang = getAngle(lm[12], lm[14], lm[16]);
+                if (ang > 160) stage = "down";
+                if (ang < 40 && stage === "down") { stage = "up"; count++; }
+                hud.innerText = stage === "down" ? "اثنِ الذراع للأعلى ⬆️" : "افرد الذراع بالكامل ⬇️";
+            } else if (mode === 'leg') {
+                ang = getAngle(lm[24], lm[26], lm[28]);
+                if (ang > 165) stage = "down";
+                if (ang < 110 && stage === "down") { stage = "up"; count++; }
+                hud.innerText = "تمرين الركبة الجاري...";
+            }
+        }
+
+        document.getElementById('ang').innerText = Math.round(ang) + "°";
+        document.getElementById('count').innerText = count;
+        ctx.restore();
+    });
+
     const videoElement = document.getElementById('video-input');
     const canvasElement = document.getElementById('output-canvas');
     const canvasCtx = canvasElement.getContext('2d');
-    
-    let counter = 0;
-    let stage = null;
-    let goal = 10; // الهدف اليومي
 
-    function calculateAngle(a, b, c) {
-        let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-        let angle = Math.abs(radians * 180.0 / Math.PI);
-        if (angle > 180.0) angle = 360 - angle;
-        return angle;
+    function initPose() {
+        const cam = new Camera(videoElement, {
+            onFrame: async () => { await pose.send({image: videoElement}); },
+            width: 640, height: 480
+        });
+        cam.start();
     }
-
-    const pose = new Pose({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
-    });
-
-    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-
-    pose.onResults((results) => {
-        if (!results.poseLandmarks) return;
-
-        canvasCtx.save();
-        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        
-        // رسم هيكل شبكي احترافي
-        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#38bdf8', lineWidth: 2});
-        drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#ffffff', radius: 1});
-
-        const lm = results.poseLandmarks;
-        const hud = document.getElementById('feedback-hud');
-        
-        // التحليل: تمرين الذراع كمثال متقدم
-        let angle = calculateAngle(lm[12], lm[14], lm[16]);
-        document.getElementById('angle-val').innerText = Math.round(angle) + "°";
-
-        // 🚨 منطق "نطاق الأمان" (Safe Zone Analytics)
-        if (angle > 165) {
-            stage = "down";
-            hud.innerText = "وضعية سليمة - اثنِ الآن";
-            hud.className = "";
-        }
-        
-        // تنبيه إذا كانت الحركة سريعة جداً أو خاطئة
-        if (angle < 40 && stage === "down") {
-            stage = "up";
-            counter++;
-            document.getElementById('counter').innerText = counter;
-            document.getElementById('progress-fill').style.width = (counter/goal * 100) + "%";
-            hud.innerText = "تم التحليل بنجاح ✅";
-            hud.className = "";
-        }
-
-        // تحذير من "التعويض الحركي" (مثلاً ميلان الظهر أثناء التمرين)
-        let spineAngle = calculateAngle(lm[11], lm[12], lm[24]); 
-        if (spineAngle < 80) {
-            hud.innerText = "⚠️ حذارِ: حافظ على استقامة ظهرك!";
-            hud.className = "warning";
-            document.getElementById('accuracy-val').innerText = "تدني الدقة!";
-        } else {
-            document.getElementById('accuracy-val').innerText = "98%";
-        }
-
-        canvasCtx.restore();
-    });
-
-    const camera = new Camera(videoElement, {
-        onFrame: async () => { await pose.send({image: videoElement}); },
-        width: 640, height: 480
-    });
-    camera.start();
 
     videoElement.addEventListener('loadedmetadata', () => {
         canvasElement.width = videoElement.videoWidth;
