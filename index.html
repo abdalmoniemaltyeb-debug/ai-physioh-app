@@ -3,68 +3,127 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>مراقب التمارين الذكي - نسخة متطورة</title>
+    <title>منصة التأهيل الذكي المتكاملة</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
 
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; }
-        .container { max-width: 700px; margin: auto; background: white; padding: 15px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        :root { --primary: #2c3e50; --secondary: #3498db; --success: #27ae60; --bg: #f4f7f6; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: var(--bg); margin: 0; padding: 0; text-align: center; }
+        
+        /* تنسيق الواجهات */
+        .page { display: none; padding: 20px; max-width: 600px; margin: auto; animation: fadeIn 0.5s; }
+        .active { display: block; }
+
+        .card { background: white; padding: 25px; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); }
+        h2 { color: var(--primary); margin-bottom: 20px; }
+
+        /* مدخلات البيانات */
+        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #ddd; box-sizing: border-box; }
+        button { background: var(--secondary); color: white; border: none; padding: 15px 30px; border-radius: 12px; cursor: pointer; font-size: 1rem; transition: 0.3s; width: 100%; margin-top: 10px; }
+        button:hover { background: #2980b9; }
+
+        /* الأقسام (Grid) */
+        .grid-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
+        .menu-item { background: white; padding: 20px; border-radius: 15px; cursor: pointer; border: 2px solid transparent; transition: 0.3s; box-shadow: 0 5px 15px rgba(0,0,0,0.05); }
+        .menu-item:hover { border-color: var(--secondary); transform: translateY(-5px); }
+        .menu-item i { font-size: 2rem; display: block; margin-bottom: 10px; }
+
+        /* الكاميرا والمراقبة */
         .video-wrapper { position: relative; width: 100%; border-radius: 15px; overflow: hidden; background: #000; }
         #video-input { width: 100%; height: auto; transform: scaleX(-1); }
         #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        
-        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-        .stat-card { background: #e8f4fd; padding: 10px; border-radius: 12px; text-align: center; }
-        .stat-value { display: block; font-size: 1.5rem; font-weight: bold; color: #2c3e50; }
-        
-        #feedback-box { 
-            margin-top: 15px; padding: 15px; border-radius: 12px; 
-            font-weight: bold; font-size: 1.2rem; transition: 0.3s;
-            background: #f8f9fa; border: 2px solid #dee2e6;
-        }
-        .correct { background: #d4edda !important; color: #155724; border-color: #c3e6cb !important; }
-        .alert { background: #fff3cd !important; color: #856404; border-color: #ffeeba !important; }
+
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <h2 style="color: #2c3e50;">🤖 نظام التوجيه الذكي</h2>
-    
-    <div class="video-wrapper">
-        <video id="video-input"></video>
-        <canvas id="output-canvas"></canvas>
+<div id="page-intake" class="page active">
+    <div class="card">
+        <h2>📝 تسجيل بيانات المريض</h2>
+        <input type="text" id="p-name" placeholder="اسم المريض الثنائي">
+        <input type="number" id="p-age" placeholder="العمر">
+        <select id="p-condition">
+            <option value="">نوع الإصابة / الحالة</option>
+            <option value="dislocation">خلع مفصلي</option>
+            <option value="nerve">إصابة عصبية</option>
+            <option value="post-surgery">تأهيل ما بعد الجراحة</option>
+            <option value="muscle-tear">تمزق عضلي</option>
+        </select>
+        <textarea id="p-notes" placeholder="ملاحظات الطبيب المعالج..."></textarea>
+        <button onclick="goToMenu()">حفظ والدخول للأقسام ←</button>
     </div>
+</div>
 
-    <div class="dashboard">
-        <div class="stat-card">
-            <span>عدد التكرارات</span>
-            <span id="counter" class="stat-value">0</span>
-        </div>
-        <div class="stat-card">
-            <span>الزاوية الحالية</span>
-            <span id="angle-display" class="stat-value">0°</span>
-        </div>
+<div id="page-menu" class="page">
+    <h2>🎯 اختر منطقة التمرين</h2>
+    <p id="welcome-msg"></p>
+    <div class="grid-menu">
+        <div class="menu-item" onclick="startExercise('arm')">💪<br>الطرف العلوي</div>
+        <div class="menu-item" onclick="startExercise('squat')">🦵<br>الطرف السفلي</div>
+        <div class="menu-item" onclick="startExercise('shoulder')">🙋‍♂️<br>مفصل الكتف</div>
+        <div class="menu-item" onclick="alert('قريباً: تمارين التوازن')">⚖️<br>التوازن</div>
     </div>
+    <button style="background:#95a5a6; margin-top:30px;" onclick="showPage('page-intake')">تعديل بيانات الحالة</button>
+</div>
 
-    <div id="feedback-box">💡 قف بوضوح لبدء التمرين...</div>
+<div id="page-monitor" class="page">
+    <div class="card" style="padding:10px;">
+        <h3 id="ex-title">جاري التحميل...</h3>
+        <div class="video-wrapper">
+            <video id="video-input"></video>
+            <canvas id="output-canvas"></canvas>
+        </div>
+        <div id="feedback-box" style="margin:10px 0; padding:15px; border-radius:10px; background:#eee;">💡 قف أمام الكاميرا...</div>
+        <div style="display:flex; gap:10px;">
+            <div style="flex:1; background:#e8f4fd; padding:10px; border-radius:10px;">العداد: <b id="counter">0</b></div>
+            <div style="flex:1; background:#e8f4fd; padding:10px; border-radius:10px;">الزاوية: <b id="angle-display">0°</b></div>
+        </div>
+        <button style="background:#e74c3c;" onclick="stopExercise()">إنهاء الجلسة ⏹️</button>
+    </div>
 </div>
 
 <script>
+    // نظام التنقل بين الصفحات
+    function showPage(pageId) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(pageId).classList.add('active');
+    }
+
+    function goToMenu() {
+        const name = document.getElementById('p-name').value;
+        if(!name) { alert("الرجاء إدخال الاسم"); return; }
+        document.getElementById('welcome-msg').innerText = "مرحباً بك: " + name;
+        showPage('page-menu');
+    }
+
+    // منطق التمارين (نفس المنطق السابق مع دمج الأقسام)
+    let currentEx = '';
+    let counter = 0;
+    let stage = null;
+
+    function startExercise(type) {
+        currentEx = type;
+        counter = 0;
+        document.getElementById('counter').innerText = "0";
+        const titles = { 'arm': 'تمارين الذراع', 'squat': 'تمارين الركبة', 'shoulder': 'تمارين الكتف' };
+        document.getElementById('ex-title').innerText = titles[type];
+        showPage('page-monitor');
+        initAI(); // تشغيل الذكاء الاصطناعي
+    }
+
+    function stopExercise() {
+        location.reload(); // أسهل طريقة لإعادة ضبط الكاميرا والبيانات
+    }
+
+    // --- منطق MediaPipe (نفس الكود الفني السابق) ---
     const videoElement = document.getElementById('video-input');
     const canvasElement = document.getElementById('output-canvas');
     const canvasCtx = canvasElement.getContext('2d');
-    const counterDisplay = document.getElementById('counter');
-    const angleDisplay = document.getElementById('angle-display');
-    const feedbackBox = document.getElementById('feedback-box');
-
-    let counter = 0;
-    let stage = null; // حالة التمرين: 'down' أو 'up'
-
-    // دالة حساب الزاوية بين ثلاث نقاط
+    
     function calculateAngle(a, b, c) {
         let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
         let angle = Math.abs(radians * 180.0 / Math.PI);
@@ -80,49 +139,43 @@
 
     pose.onResults((results) => {
         if (!results.poseLandmarks) return;
-
         canvasCtx.save();
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
-        drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', radius: 1});
+        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#3498db', lineWidth: 4});
+        
+        const lm = results.poseLandmarks;
+        let angle = 0;
+        let fb = document.getElementById('feedback-box');
 
-        // الحصول على نقاط الذراع الأيمن (الكتف 12، المرفق 14، المعصم 16)
-        const landmarks = results.poseLandmarks;
-        const shoulder = landmarks[12];
-        const elbow = landmarks[14];
-        const wrist = landmarks[16];
-
-        // حساب الزاوية
-        const angle = calculateAngle(shoulder, elbow, wrist);
-        angleDisplay.innerText = Math.round(angle) + "°";
-
-        // منطق العداد والتغذية الراجعة
-        if (angle > 160) {
-            stage = "down";
-            feedbackBox.innerText = "💪 ممتاز! الآن اثنِ ذراعك للأعلى";
-            feedbackBox.className = "alert";
-        }
-        if (angle < 30 && stage === "down") {
-            stage = "up";
-            counter++;
-            counterDisplay.innerText = counter;
-            feedbackBox.innerText = "✅ حركة صحيحة! استمر";
-            feedbackBox.className = "correct";
+        if (currentEx === 'arm') {
+            angle = calculateAngle(lm[12], lm[14], lm[16]);
+            if (angle > 160) stage = "down";
+            if (angle < 40 && stage === "down") { stage = "up"; counter++; fb.style.background="#d4edda"; }
+        } else if (currentEx === 'squat') {
+            angle = calculateAngle(lm[24], lm[26], lm[28]);
+            if (angle > 160) stage = "down";
+            if (angle < 100 && stage === "down") { stage = "up"; counter++; fb.style.background="#d4edda"; }
+        } else if (currentEx === 'shoulder') {
+            angle = calculateAngle(lm[14], lm[12], lm[24]);
+            if (angle < 30) stage = "down";
+            if (angle > 80 && stage === "down") { stage = "up"; counter++; fb.style.background="#d4edda"; }
         }
 
+        document.getElementById('angle-display').innerText = Math.round(angle) + "°";
+        document.getElementById('counter').innerText = counter;
         canvasCtx.restore();
     });
 
-    const camera = new Camera(videoElement, {
-        onFrame: async () => { await pose.send({image: videoElement}); },
-        width: 640, height: 480
-    });
-    camera.start();
-
-    videoElement.addEventListener('loadedmetadata', () => {
-        canvasElement.width = videoElement.videoWidth;
-        canvasElement.height = videoElement.videoHeight;
-    });
+    let camera = null;
+    function initAI() {
+        if (!camera) {
+            camera = new Camera(videoElement, {
+                onFrame: async () => { await pose.send({image: videoElement}); },
+                width: 640, height: 480
+            });
+            camera.start();
+        }
+    }
 </script>
 </body>
 </html>
