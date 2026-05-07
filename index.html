@@ -3,146 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-BackCare | منصة تأهيل الظهر الذكية</title>
+    <title>AI-Spine Care | منصة تأهيل الظهر الاحترافية</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
 
     <style>
-        :root { --primary: #0f172a; --accent: #38bdf8; --danger: #f43f5e; --card: #1e293b; }
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background: var(--primary); color: white; margin: 0; }
+        :root { --primary: #0f172a; --accent: #38bdf8; --success: #10b981; --warning: #f59e0b; --danger: #f43f5e; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--primary); color: white; margin: 0; padding: 20px; }
         
-        .page { display: none; padding: 20px; max-width: 800px; margin: auto; animation: fadeIn 0.5s ease; }
+        .container { max-width: 900px; margin: auto; }
+        .page { display: none; animation: slideUp 0.4s ease-out; }
         .active { display: block; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 
-        .card { background: var(--card); padding: 30px; border-radius: 20px; border: 1px solid #334155; }
-        h2 { color: var(--accent); text-align: center; }
+        .card { background: #1e293b; padding: 25px; border-radius: 20px; border: 1px solid #334155; margin-bottom: 20px; }
+        h2 { color: var(--accent); margin-top: 0; }
 
-        input, select, textarea { width: 100%; padding: 12px; margin: 10px 0; border-radius: 10px; border: 1px solid #475569; background: #0f172a; color: white; }
-        button { width: 100%; background: var(--accent); color: var(--primary); padding: 15px; border: none; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.3s; margin-top: 10px; }
-        button:hover { background: #0ea5e9; }
+        /* الأزرار والقوائم */
+        select, input { width: 100%; padding: 15px; margin: 10px 0; border-radius: 12px; background: #0f172a; color: white; border: 1px solid #475569; }
+        button { background: var(--accent); color: var(--primary); border: none; padding: 15px 25px; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; font-size: 1.1rem; }
+        button:hover { filter: brightness(1.2); transform: translateY(-2px); }
 
-        .grid-menu { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 20px; }
-        .menu-item { background: var(--card); padding: 20px; border-radius: 15px; border: 1px solid #334155; text-align: center; cursor: pointer; transition: 0.3s; }
-        .menu-item:hover { border-color: var(--accent); transform: scale(1.03); }
+        /* مكتبة التمارين */
+        .library-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
+        .lib-item { background: #334155; padding: 15px; border-radius: 15px; border-right: 4px solid var(--accent); }
 
-        .video-box { position: relative; width: 100%; border-radius: 15px; overflow: hidden; background: #000; }
-        #video-input { width: 100%; height: auto; transform: scaleX(-1); opacity: 0.8; }
+        /* واجهة الكاميرا الجانبية */
+        .camera-box { position: relative; width: 100%; border-radius: 20px; overflow: hidden; background: #000; box-shadow: 0 0 30px rgba(56, 189, 248, 0.2); }
+        #video-input { width: 100%; height: auto; transform: scaleX(-1); }
         #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
-        .hud { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.8); padding: 8px 15px; border-radius: 50px; border: 1px solid var(--accent); white-space: nowrap; }
-        .stats-panel { display: flex; gap: 10px; margin-top: 15px; }
-        .stat { flex: 1; background: var(--card); padding: 15px; border-radius: 12px; text-align: center; }
+        .ai-hud { position: absolute; top: 20px; right: 20px; left: 20px; background: rgba(15, 23, 42, 0.9); padding: 12px; border-radius: 12px; border: 1px solid var(--accent); text-align: center; }
+        .stats-bar { display: flex; gap: 10px; margin-top: 15px; }
+        .stat { flex: 1; background: #1e293b; padding: 15px; border-radius: 15px; text-align: center; border-bottom: 3px solid var(--accent); }
+
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-<div id="page-intake" class="page active">
-    <div class="card">
-        <h2>🛡️ تشخيص آلام الظهر</h2>
-        <p style="text-align:center;">أدخل بياناتك لتخصيص خطة التمارين</p>
-        <input type="text" id="user-name" placeholder="الاسم">
-        <select id="back-condition">
-            <option value="">حدد حالة الظهر...</option>
-            <option value="disc">انزلاق غضروفي (Disc Prolapse)</option>
-            <option value="sciatica">عرق النسا (Sciatica)</option>
-            <option value="stiffness">تيبس الفقرات / خشونة</option>
-            <option value="post-op">تأهيل ما بعد الجراحة</option>
-        </select>
-        <textarea placeholder="وصف الألم (مثلاً: ألم في أسفل الظهر يمتد للرجل)"></textarea>
-        <button onclick="nav('page-menu')">متابعة التمارين ←</button>
+<div class="container">
+    <div id="p1" class="page active">
+        <div class="card">
+            <h1>🛡️ نظام تأهيل الظهر الذكي</h1>
+            <p>اختر حالتك بناءً على التشخيص الطبي لتحديد التمارين الآمنة:</p>
+            <select id="condition-selector">
+                <option value="disc">انزلاق غضروفي (Disc Herniation)</option>
+                <option value="stenosis">تضيق القناة الشوكية (Stenosis)</option>
+                <option value="sciatica">عرق النسا (Sciatica)</option>
+                <option value="scoliosis">انحناء الظهر (Posture/Kyphosis)</option>
+            </select>
+            <button onclick="loadLibrary()">عرض خطة التمارين ←</button>
+        </div>
     </div>
-</div>
 
-<div id="page-menu" class="page">
-    <h2>🎯 تمارين العمود الفقري</h2>
-    <div class="grid-menu">
-        <div class="menu-item" onclick="startEx('catcow')">🐈🐄<br>تمرين القطة (Cat-Cow)<br><small>لمرونة الفقرات</small></div>
-        <div class="menu-item" onclick="startEx('birddog')">🐕🕊️<br>تمرين الطائر (Bird-Dog)<br><small>لاستقرار الجذع</small></div>
-        <div class="menu-item" onclick="startEx('bridge')">🌉<br>تمرين الجسر (Bridge)<br><small>لتقوية أسفل الظهر</small></div>
-        <div class="menu-item" onclick="alert('قريباً: تمارين الإطالة الجانبية')">🧘<br>إطالات متقدمة</div>
+    <div id="p2" class="page">
+        <div class="card">
+            <h2 id="lib-title">📚 مكتبة تمارين الحالة</h2>
+            <div id="exercise-list" class="library-grid"></div>
+            <hr style="border: 0.5px solid #334155; margin: 20px 0;">
+            <p style="color: var(--warning); font-size: 0.9rem;">⚠️ تنبيه: قف بجانب الكاميرا (بوضعية جانبية) ليتمكن الذكاء الاصطناعي من تحليل انحناء الظهر.</p>
+            <button onclick="startMonitoring()">بدء المراقبة الحية 🎥</button>
+            <button onclick="nav('p1')" style="background:#475569; margin-top:10px;">رجوع</button>
+        </div>
     </div>
-</div>
 
-<div id="page-monitor" class="page">
-    <div class="card" style="padding:10px;">
-        <h3 id="ex-name" style="text-align:center; color:var(--accent);">تمرين الظهر</h3>
-        <div class="video-box">
-            <div id="hud" class="hud">جاري معايرة العمود الفقري...</div>
+    <div id="p3" class="page">
+        <div class="camera-box">
+            <div id="ai-hud" class="ai-hud">جاري تحليل وضعية الجسم الجانبية...</div>
             <video id="video-input"></video>
             <canvas id="output-canvas"></canvas>
         </div>
-        <div class="stats-panel">
-            <div class="stat">العداد: <b id="count">0</b></div>
-            <div class="stat">زاوية الفقرات: <b id="angle">0°</b></div>
+        <div class="stats-bar">
+            <div class="stat">العداد<br><b id="count" style="font-size:1.4rem;">0</b></div>
+            <div class="stat">انحناء الظهر<br><b id="angle" style="font-size:1.4rem;">0°</b></div>
+            <div class="stat">الجودة<br><b id="quality" style="color:var(--success);">جيدة</b></div>
         </div>
-        <button style="background:var(--danger); margin-top:15px;" onclick="location.reload()">إنهاء التمرين</button>
+        <button style="background:var(--danger); margin-top:20px;" onclick="location.reload()">إنهاء الجلسة</button>
     </div>
 </div>
 
 <script>
+    // بيانات التمارين بناءً على جدولك
+    const library = {
+        'disc': [
+            { name: 'Extension (McKenzie)', desc: 'فرد الظهر للخلف لتقليل ضغط الديسك' },
+            { name: 'Core Plank', desc: 'تقوية العضلات العميقة لتثبيت الفقرات' }
+        ],
+        'stenosis': [
+            { name: 'Pelvic Tilt', desc: 'إمالة الحوض لتوسيع مجرى العصب' },
+            { name: 'Knee to Chest', desc: 'ثني الركبة للصدر لتخفيف الضغط' }
+        ]
+    };
+
+    let selectedCondition = '';
+    let counter = 0;
+    let stage = null;
+
     function nav(id) {
         document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
         document.getElementById(id).classList.add('active');
     }
 
-    let currentEx = ''; let counter = 0; let stage = null;
+    function loadLibrary() {
+        selectedCondition = document.getElementById('condition-selector').value;
+        const list = document.getElementById('exercise-list');
+        list.innerHTML = '';
+        const items = library[selectedCondition] || library['disc'];
+        
+        items.forEach(ex => {
+            list.innerHTML += `<div class="lib-item"><h3>${ex.name}</h3><p>${ex.desc}</p></div>`;
+        });
+        nav('p2');
+    }
 
-    function startEx(type) {
-        currentEx = type;
-        document.getElementById('ex-name').innerText = type.toUpperCase();
-        nav('page-monitor');
+    function startMonitoring() {
+        nav('p3');
         initAI();
     }
 
-    function calculateAngle(a, b, c) {
-        let r = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
-        let ang = Math.abs(r * 180.0 / Math.PI);
-        return ang > 180 ? 360 - ang : ang;
-    }
-
-    const pose = new Pose({ locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}` });
-    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.6 });
+    // منطق الذكاء الاصطناعي
+    const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+    pose.setOptions({modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.6});
 
     pose.onResults((res) => {
         if (!res.poseLandmarks) return;
         const ctx = canvasCtx;
         ctx.save();
         ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        drawConnectors(ctx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#38bdf8', lineWidth: 3});
+        drawConnectors(ctx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#38bdf8', lineWidth: 4});
         
         const lm = res.poseLandmarks;
-        const hud = document.getElementById('hud');
-        let angle = 0;
+        const hud = document.getElementById('ai-hud');
+        
+        // حساب زاوية الظهر الجانبية (كتف - حوض - ركبة)
+        // نستخدم النقاط الجانبية (12, 24, 26 للجانب الأيمن)
+        const angle = calculateAngle(lm[12], lm[24], lm[26]);
+        document.getElementById('angle').innerText = Math.round(angle) + "°";
 
-        // خوارزمية تتبع استقامة العمود الفقري (بين الكتف والحوض)
-        let spineAlignment = Math.abs(lm[11].y - lm[12].y);
-        if (spineAlignment > 0.08) {
-            hud.innerText = "⚠️ انتبه: ظهرك غير متوازن!";
-            hud.style.color = "red";
-        } else {
-            hud.style.color = "white";
-
-            if (currentEx === 'catcow') {
-                angle = calculateAngle(lm[11], lm[23], lm[25]); // زاوية الظهر/الحوض
-                if (angle > 160) stage = "arch";
-                if (angle < 130 && stage === "arch") { stage = "curl"; counter++; }
-                hud.innerText = stage === "arch" ? "اخفض ظهرك للأسفل ⬇️" : "ارفع ظهرك للأعلى ⬆️";
-            } 
-            else if (currentEx === 'bridge') {
-                angle = calculateAngle(lm[11], lm[23], lm[25]); // زاوية الحوض
-                if (angle < 140) stage = "down";
-                if (angle > 170 && stage === "down") { stage = "up"; counter++; }
-                hud.innerText = "ارفع الحوض للأعلى ⬆️";
+        // التحليل الذكي بناءً على الحالة
+        if (selectedCondition === 'disc') {
+            if (angle < 140) {
+                hud.innerText = "🚨 تحذير: انحناء خطر للأمام! ارجع للخلف";
+                hud.style.color = "var(--danger)";
+                document.getElementById('quality').innerText = "سيئة";
+            } else {
+                hud.innerText = "وضعية سليمة للديسك ✅";
+                hud.style.color = "var(--success)";
+                document.getElementById('quality').innerText = "جيدة";
+                
+                // عداد تمرين الـ Extension
+                if (angle > 170) stage = "down";
+                if (angle < 155 && stage === "down") { stage = "up"; counter++; }
             }
         }
-
-        document.getElementById('angle').innerText = Math.round(angle) + "°";
+        
         document.getElementById('count').innerText = counter;
         ctx.restore();
     });
+
+    // دوال مساعدة
+    function calculateAngle(a, b, c) {
+        let r = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
+        let ang = Math.abs(r * 180 / Math.PI);
+        return ang > 180 ? 360 - ang : ang;
+    }
 
     const videoElement = document.getElementById('video-input');
     const canvasElement = document.getElementById('output-canvas');
@@ -157,4 +183,3 @@
 </script>
 </body>
 </html>
-
