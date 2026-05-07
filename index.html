@@ -130,7 +130,19 @@
             onFrame: async () => { await pose.send({image: videoElement}); },
             width: 480, height: 360 // تقليل الجودة لزيادة السرعة
         }).start();
+    }async function initPose() {
+    try {
+        const cam = new Camera(videoElement, {
+            onFrame: async () => { await pose.send({image: videoElement}); },
+            width: 480, height: 360
+        });
+        await cam.start();
+        console.log("Camera started successfully");
+    } catch (err) {
+        alert("خطأ في فتح الكاميرا: " + err.message);
     }
+}
+
 </script>
 </body>
 </html>
