@@ -3,167 +3,118 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-Spine Care | منصة تأهيل الظهر الاحترافية</title>
+    <title>AI-Spine Pro | نظام تأهيل الظهر الاحترافي</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
 
     <style>
-        :root { --primary: #0f172a; --accent: #38bdf8; --success: #10b981; --warning: #f59e0b; --danger: #f43f5e; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--primary); color: white; margin: 0; padding: 20px; }
-        
-        .container { max-width: 900px; margin: auto; }
-        .page { display: none; animation: slideUp 0.4s ease-out; }
+        :root { --primary: #0f172a; --accent: #38bdf8; --danger: #f43f5e; --success: #10b981; }
+        body { font-family: 'Segoe UI', sans-serif; background: var(--primary); color: white; margin: 0; padding: 15px; }
+        .page { display: none; animation: fadeIn 0.3s; }
         .active { display: block; }
-
-        .card { background: #1e293b; padding: 25px; border-radius: 20px; border: 1px solid #334155; margin-bottom: 20px; }
-        h2 { color: var(--accent); margin-top: 0; }
-
-        /* الأزرار والقوائم */
-        select, input { width: 100%; padding: 15px; margin: 10px 0; border-radius: 12px; background: #0f172a; color: white; border: 1px solid #475569; }
-        button { background: var(--accent); color: var(--primary); border: none; padding: 15px 25px; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; font-size: 1.1rem; }
-        button:hover { filter: brightness(1.2); transform: translateY(-2px); }
-
-        /* مكتبة التمارين */
-        .library-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 15px; }
-        .lib-item { background: #334155; padding: 15px; border-radius: 15px; border-right: 4px solid var(--accent); }
-
-        /* واجهة الكاميرا الجانبية */
-        .camera-box { position: relative; width: 100%; border-radius: 20px; overflow: hidden; background: #000; box-shadow: 0 0 30px rgba(56, 189, 248, 0.2); }
+        .card { background: #1e293b; padding: 20px; border-radius: 20px; border: 1px solid #334155; margin-bottom: 15px; }
+        button { background: var(--accent); color: var(--primary); border: none; padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; margin-top: 10px; }
+        .video-box { position: relative; width: 100%; border-radius: 15px; overflow: hidden; background: #000; }
         #video-input { width: 100%; height: auto; transform: scaleX(-1); }
         #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-
-        .ai-hud { position: absolute; top: 20px; right: 20px; left: 20px; background: rgba(15, 23, 42, 0.9); padding: 12px; border-radius: 12px; border: 1px solid var(--accent); text-align: center; }
-        .stats-bar { display: flex; gap: 10px; margin-top: 15px; }
-        .stat { flex: 1; background: #1e293b; padding: 15px; border-radius: 15px; text-align: center; border-bottom: 3px solid var(--accent); }
-
-        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        .hud { position: absolute; top: 10px; width: 90%; left: 5%; background: rgba(15, 23, 42, 0.9); padding: 10px; border-radius: 10px; border: 1px solid var(--accent); text-align: center; font-size: 0.9rem; }
+        .lib-item { background: #334155; padding: 12px; border-radius: 10px; margin-bottom: 10px; border-right: 4px solid var(--accent); }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div id="p1" class="page active">
-        <div class="card">
-            <h1>🛡️ نظام تأهيل الظهر الذكي</h1>
-            <p>اختر حالتك بناءً على التشخيص الطبي لتحديد التمارين الآمنة:</p>
-            <select id="condition-selector">
-                <option value="disc">انزلاق غضروفي (Disc Herniation)</option>
-                <option value="stenosis">تضيق القناة الشوكية (Stenosis)</option>
-                <option value="sciatica">عرق النسا (Sciatica)</option>
-                <option value="scoliosis">انحناء الظهر (Posture/Kyphosis)</option>
-            </select>
-            <button onclick="loadLibrary()">عرض خطة التمارين ←</button>
-        </div>
-    </div>
-
-    <div id="p2" class="page">
-        <div class="card">
-            <h2 id="lib-title">📚 مكتبة تمارين الحالة</h2>
-            <div id="exercise-list" class="library-grid"></div>
-            <hr style="border: 0.5px solid #334155; margin: 20px 0;">
-            <p style="color: var(--warning); font-size: 0.9rem;">⚠️ تنبيه: قف بجانب الكاميرا (بوضعية جانبية) ليتمكن الذكاء الاصطناعي من تحليل انحناء الظهر.</p>
-            <button onclick="startMonitoring()">بدء المراقبة الحية 🎥</button>
-            <button onclick="nav('p1')" style="background:#475569; margin-top:10px;">رجوع</button>
-        </div>
-    </div>
-
-    <div id="p3" class="page">
-        <div class="camera-box">
-            <div id="ai-hud" class="ai-hud">جاري تحليل وضعية الجسم الجانبية...</div>
-            <video id="video-input"></video>
-            <canvas id="output-canvas"></canvas>
-        </div>
-        <div class="stats-bar">
-            <div class="stat">العداد<br><b id="count" style="font-size:1.4rem;">0</b></div>
-            <div class="stat">انحناء الظهر<br><b id="angle" style="font-size:1.4rem;">0°</b></div>
-            <div class="stat">الجودة<br><b id="quality" style="color:var(--success);">جيدة</b></div>
-        </div>
-        <button style="background:var(--danger); margin-top:20px;" onclick="location.reload()">إنهاء الجلسة</button>
+<div id="p1" class="page active">
+    <div class="card">
+        <h2>🛡️ تشخيص حالة الظهر</h2>
+        <select id="back-type" style="width:100%; padding:12px; border-radius:10px; margin-bottom:15px;">
+            <option value="disc">انزلاق غضروفي (Disc)</option>
+            <option value="stenosis">تضيق القناة (Stenosis)</option>
+            <option value="sciatica">عرق النسا (Sciatica)</option>
+            <option value="strain">شد عضلي (Strain)</option>
+        </select>
+        <button onclick="showLibrary()">عرض المرجع والخطة ←</button>
     </div>
 </div>
 
+<div id="p2" class="page">
+    <div class="card">
+        <h2 id="lib-title">📚 المرجع التعليمي</h2>
+        <div id="ex-list"></div>
+        <p style="color:var(--accent); font-size:0.8rem;">* تأكد من الوقوف بشكل جانبي للكاميرا لتحليل دقيق.</p>
+        <button onclick="startAI()">ابدأ المراقبة الحية 🎥</button>
+    </div>
+</div>
+
+<div id="p3" class="page">
+    <div class="video-box">
+        <div id="hud" class="hud">جاري المعايرة الجانبية...</div>
+        <video id="video-input"></video>
+        <canvas id="output-canvas"></canvas>
+    </div>
+    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:10px; margin-top:10px;">
+        <div class="card" style="padding:10px; text-align:center;">العداد: <b id="count">0</b></div>
+        <div class="card" style="padding:10px; text-align:center;">الزاوية: <b id="angle">0°</b></div>
+    </div>
+    <button style="background:var(--danger);" onclick="location.reload()">إنهاء</button>
+</div>
+
 <script>
-    // بيانات التمارين بناءً على جدولك
-    const library = {
-        'disc': [
-            { name: 'Extension (McKenzie)', desc: 'فرد الظهر للخلف لتقليل ضغط الديسك' },
-            { name: 'Core Plank', desc: 'تقوية العضلات العميقة لتثبيت الفقرات' }
-        ],
-        'stenosis': [
-            { name: 'Pelvic Tilt', desc: 'إمالة الحوض لتوسيع مجرى العصب' },
-            { name: 'Knee to Chest', desc: 'ثني الركبة للصدر لتخفيف الضغط' }
-        ]
+    const exercises = {
+        'disc': [{n:'McKenzie Extension', d:'فرد الظهر للخلف لتخفيف الضغط.'}, {n:'Prone Prop Up', d:'الاستلقاء على البطن مع رفع الصدر.'}],
+        'stenosis': [{n:'Pelvic Tilt', d:'تقليل تقوس الظهر لتوسيع القناة.'}, {n:'Knees to Chest', d:'ضم الركب للصدر لراحة الأعصاب.'}],
+        'sciatica': [{n:'Nerve Gliding', d:'تحريك العصب بلطف لفك الالتصاقات.'}, {n:'Hamstring Stretch', d:'إطالة عضلات الفخذ الخلفية.'}]
     };
 
-    let selectedCondition = '';
-    let counter = 0;
-    let stage = null;
+    let mode = ''; let count = 0; let stage = null;
 
-    function nav(id) {
-        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-        document.getElementById(id).classList.add('active');
-    }
-
-    function loadLibrary() {
-        selectedCondition = document.getElementById('condition-selector').value;
-        const list = document.getElementById('exercise-list');
+    function showLibrary() {
+        mode = document.getElementById('back-type').value;
+        const list = document.getElementById('ex-list');
         list.innerHTML = '';
-        const items = library[selectedCondition] || library['disc'];
-        
-        items.forEach(ex => {
-            list.innerHTML += `<div class="lib-item"><h3>${ex.name}</h3><p>${ex.desc}</p></div>`;
+        (exercises[mode] || exercises['disc']).forEach(ex => {
+            list.innerHTML += `<div class="lib-item"><b>${ex.n}</b><br><small>${ex.d}</small></div>`;
         });
-        nav('p2');
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById('p2').classList.add('active');
     }
 
-    function startMonitoring() {
-        nav('p3');
-        initAI();
+    function startAI() {
+        document.getElementById('p2').classList.remove('active');
+        document.getElementById('p3').classList.add('active');
+        initPose();
     }
 
-    // منطق الذكاء الاصطناعي
     const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
-    pose.setOptions({modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.6});
+    pose.setOptions({ modelComplexity: 0, smoothLandmarks: false, minDetectionConfidence: 0.5 }); // إعدادات السرعة القصوى
 
     pose.onResults((res) => {
         if (!res.poseLandmarks) return;
-        const ctx = canvasCtx;
-        ctx.save();
-        ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        drawConnectors(ctx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#38bdf8', lineWidth: 4});
+        canvasCtx.save();
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        drawConnectors(canvasCtx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#38bdf8', lineWidth: 2});
         
         const lm = res.poseLandmarks;
-        const hud = document.getElementById('ai-hud');
-        
-        // حساب زاوية الظهر الجانبية (كتف - حوض - ركبة)
-        // نستخدم النقاط الجانبية (12, 24, 26 للجانب الأيمن)
-        const angle = calculateAngle(lm[12], lm[24], lm[26]);
-        document.getElementById('angle').innerText = Math.round(angle) + "°";
+        const hud = document.getElementById('hud');
+        // تحليل جانبي (كتف 12 - حوض 24 - ركبة 26)
+        let ang = calculateAngle(lm[12], lm[24], lm[26]);
+        document.getElementById('angle').innerText = Math.round(ang) + "°";
 
-        // التحليل الذكي بناءً على الحالة
-        if (selectedCondition === 'disc') {
-            if (angle < 140) {
-                hud.innerText = "🚨 تحذير: انحناء خطر للأمام! ارجع للخلف";
-                hud.style.color = "var(--danger)";
-                document.getElementById('quality').innerText = "سيئة";
-            } else {
-                hud.innerText = "وضعية سليمة للديسك ✅";
-                hud.style.color = "var(--success)";
-                document.getElementById('quality').innerText = "جيدة";
-                
-                // عداد تمرين الـ Extension
-                if (angle > 170) stage = "down";
-                if (angle < 155 && stage === "down") { stage = "up"; counter++; }
+        if (mode === 'disc') {
+            if (ang < 150) { 
+                hud.innerText = "🚨 انحناء خطر للأمام!"; hud.style.color = "red"; 
+            } else { 
+                hud.innerText = "وضعية ممتازة للديسك ✅"; hud.style.color = "#38bdf8";
+                if (ang > 170) stage = "down";
+                if (ang < 160 && stage === "down") { stage = "up"; count++; }
             }
         }
-        
-        document.getElementById('count').innerText = counter;
-        ctx.restore();
+        document.getElementById('count').innerText = count;
+        canvasCtx.restore();
     });
 
-    // دوال مساعدة
     function calculateAngle(a, b, c) {
         let r = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
         let ang = Math.abs(r * 180 / Math.PI);
@@ -174,10 +125,10 @@
     const canvasElement = document.getElementById('output-canvas');
     const canvasCtx = canvasElement.getContext('2d');
 
-    function initAI() {
+    function initPose() {
         new Camera(videoElement, {
             onFrame: async () => { await pose.send({image: videoElement}); },
-            width: 640, height: 480
+            width: 480, height: 360 // تقليل الجودة لزيادة السرعة
         }).start();
     }
 </script>
