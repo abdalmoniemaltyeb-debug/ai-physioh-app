@@ -3,96 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام مراقبة العلاج الطبيعي الذكي</title>
+    <title>مراقب التمارين الذكي - نسخة متطورة</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
 
     <style>
-        body { font-family: sans-serif; background-color: #f0f2f5; text-align: center; margin: 0; padding: 20px; }
-        .container { max-width: 800px; margin: auto; background: white; padding: 20px; border-radius: 15px; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
-        h1 { color: #2c3e50; }
-        .video-container { position: relative; width: 100%; max-width: 640px; margin: auto; background: #000; border-radius: 10px; overflow: hidden; }
-        canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
-        #video-input { width: 100%; height: auto; display: block; transform: scaleX(-1); }
-        .stats-panel { margin-top: 20px; display: flex; justify-content: space-around; background: #ecf0f1; padding: 15px; border-radius: 8px; }
-        .stat-box { font-size: 1.2rem; font-weight: bold; color: #2980b9; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; margin: 0; padding: 10px; }
+        .container { max-width: 700px; margin: auto; background: white; padding: 15px; border-radius: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        .video-wrapper { position: relative; width: 100%; border-radius: 15px; overflow: hidden; background: #000; }
+        #video-input { width: 100%; height: auto; transform: scaleX(-1); }
+        #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        
+        .dashboard { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .stat-card { background: #e8f4fd; padding: 10px; border-radius: 12px; text-align: center; }
+        .stat-value { display: block; font-size: 1.5rem; font-weight: bold; color: #2c3e50; }
+        
+        #feedback-box { 
+            margin-top: 15px; padding: 15px; border-radius: 12px; 
+            font-weight: bold; font-size: 1.2rem; transition: 0.3s;
+            background: #f8f9fa; border: 2px solid #dee2e6;
+        }
+        .correct { background: #d4edda !important; color: #155724; border-color: #c3e6cb !important; }
+        .alert { background: #fff3cd !important; color: #856404; border-color: #ffeeba !important; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h1>مراقب التمارين الذكي 🤖</h1>
-    <p>قف أمام الكاميرا لبدء تحليل الحركة وتصحيح التمارين</p>
-
-    <div class="video-container">
+    <h2 style="color: #2c3e50;">🤖 نظام التوجيه الذكي</h2>
+    
+    <div class="video-wrapper">
         <video id="video-input"></video>
         <canvas id="output-canvas"></canvas>
     </div>
 
-    <div class="stats-panel">
-        <div class="stat-box">الحالة: <span id="status">جاري التحميل...</span></div>
-        <div class="stat-box">دقة الوضعية: <span id="accuracy">0%</span></div>
+    <div class="dashboard">
+        <div class="stat-card">
+            <span>عدد التكرارات</span>
+            <span id="counter" class="stat-value">0</span>
+        </div>
+        <div class="stat-card">
+            <span>الزاوية الحالية</span>
+            <span id="angle-display" class="stat-value">0°</span>
+        </div>
     </div>
+
+    <div id="feedback-box">💡 قف بوضوح لبدء التمرين...</div>
 </div>
 
 <script>
     const videoElement = document.getElementById('video-input');
     const canvasElement = document.getElementById('output-canvas');
     const canvasCtx = canvasElement.getContext('2d');
-    const statusText = document.getElementById('status');
-    const accuracyText = document.getElementById('accuracy');
+    const counterDisplay = document.getElementById('counter');
+    const angleDisplay = document.getElementById('angle-display');
+    const feedbackBox = document.getElementById('feedback-box');
 
-    // إعدادات مكتبة Pose
+    let counter = 0;
+    let stage = null; // حالة التمرين: 'down' أو 'up'
+
+    // دالة حساب الزاوية بين ثلاث نقاط
+    function calculateAngle(a, b, c) {
+        let radians = Math.atan2(c.y - b.y, c.x - b.x) - Math.atan2(a.y - b.y, a.x - b.x);
+        let angle = Math.abs(radians * 180.0 / Math.PI);
+        if (angle > 180.0) angle = 360 - angle;
+        return angle;
+    }
+
     const pose = new Pose({
         locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
     });
 
-    pose.setOptions({
-        modelComplexity: 1,
-        smoothLandmarks: true,
-        minDetectionConfidence: 0.5,
-        minTrackingConfidence: 0.5
-    });
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
 
-    // دالة المعالجة والرسم
-    function onResults(results) {
-        if (!results.poseLandmarks) {
-            statusText.innerText = "لم يتم اكتشاف جسم";
-            return;
-        }
-
-        statusText.innerText = "يتم التتبع بنجاح ✅";
-        accuracyText.innerText = (results.poseLandmarks[0].visibility * 100).toFixed(0) + "%";
+    pose.onResults((results) => {
+        if (!results.poseLandmarks) return;
 
         canvasCtx.save();
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        
-        // رسم الهيكل العظمي
-        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 4});
-        drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', lineWidth: 2});
+        drawConnectors(canvasCtx, results.poseLandmarks, POSE_CONNECTIONS, {color: '#00FF00', lineWidth: 2});
+        drawLandmarks(canvasCtx, results.poseLandmarks, {color: '#FF0000', radius: 1});
+
+        // الحصول على نقاط الذراع الأيمن (الكتف 12، المرفق 14، المعصم 16)
+        const landmarks = results.poseLandmarks;
+        const shoulder = landmarks[12];
+        const elbow = landmarks[14];
+        const wrist = landmarks[16];
+
+        // حساب الزاوية
+        const angle = calculateAngle(shoulder, elbow, wrist);
+        angleDisplay.innerText = Math.round(angle) + "°";
+
+        // منطق العداد والتغذية الراجعة
+        if (angle > 160) {
+            stage = "down";
+            feedbackBox.innerText = "💪 ممتاز! الآن اثنِ ذراعك للأعلى";
+            feedbackBox.className = "alert";
+        }
+        if (angle < 30 && stage === "down") {
+            stage = "up";
+            counter++;
+            counterDisplay.innerText = counter;
+            feedbackBox.innerText = "✅ حركة صحيحة! استمر";
+            feedbackBox.className = "correct";
+        }
+
         canvasCtx.restore();
-    }
+    });
 
-    pose.onResults(onResults);
-
-    // تشغيل الكاميرا
     const camera = new Camera(videoElement, {
-        onFrame: async () => {
-            await pose.send({image: videoElement});
-        },
-        width: 640,
-        height: 480
+        onFrame: async () => { await pose.send({image: videoElement}); },
+        width: 640, height: 480
     });
     camera.start();
 
-    // ضبط حجم الكانفس ليتطابق مع الفيديو
     videoElement.addEventListener('loadedmetadata', () => {
         canvasElement.width = videoElement.videoWidth;
         canvasElement.height = videoElement.videoHeight;
     });
 </script>
-
 </body>
 </html>
