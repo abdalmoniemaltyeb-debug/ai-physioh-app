@@ -2,8 +2,21 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Physioh Pro</title>  <script src="https://cdn.tailwindcss.com"></script>  <script type="module">
+  <title>AI Physioh Pro</title>  
+  <script src="https://cdn.tailwindcss.com"></script>  
+  <script type="module">
     import { PoseLandmarker, FilesetResolver, DrawingUtils } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0';
+
+    // متغيرات متابعة التمارين
+    let repsCount = 0;
+    let exerciseStage = "start"; // لتتبع حالة الحركة (ذهاب وإياب)
+    
+    // دالة التوجيه الصوتي
+    function speak(text) {
+      const msg = new SpeechSynthesisUtterance(text);
+      msg.lang = 'ar-SA';
+      window.speechSynthesis.speak(msg);
+    }
 
     window.startPoseDetection = async function () {
       const video = document.getElementById('video');
@@ -21,216 +34,142 @@
 
       const poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
         baseOptions: {
-          modelAssetPath:
-            'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task'
+          modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task'
         },
         runningMode: 'VIDEO',
         numPoses: 1
       });
 
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: true
-      });
-
+      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
       video.srcObject = stream;
 
       video.addEventListener('loadeddata', () => {
         canvas.width = video.videoWidth;
         canvas.height = video.videoHeight;
-
         const drawingUtils = new DrawingUtils(ctx);
 
         async function detect() {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
           ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-
           const results = poseLandmarker.detectForVideo(video, performance.now());
 
           if (results.landmarks.length > 0) {
             const landmarks = results.landmarks[0];
-
-            drawingUtils.drawLandmarks(landmarks, {
-              radius: 5
-            });
-
-            drawingUtils.drawConnectors(
-              landmarks,
-              PoseLandmarker.POSE_CONNECTIONS
-            );
-
-            analyzePosture(landmarks);
+            drawingUtils.drawLandmarks(landmarks, { radius: 5 });
+            drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS);
+            
+            analyzePostureAndTrackExercise(landmarks);
           }
-
           requestAnimationFrame(detect);
         }
 
-        function analyzePosture(landmarks) {
+        function analyzePostureAndTrackExercise(landmarks) {
           const leftShoulder = landmarks[11];
           const rightShoulder = landmarks[12];
           const leftEar = landmarks[7];
 
           let diagnosis = 'الوضعية ممتازة ✅';
-          let exercises = '';
+          let exercisesHTML = '';
 
+          // 1. تحليل الوضعية (Forward Head)
           if (leftEar.x < leftShoulder.x - 0.05) {
             diagnosis = 'Forward Head Posture Detected ❌';
+            
+            // 2. منطق عد التكرارات لتمرين Chin Tuck
+            // الفكرة: المريض يسحب رأسه للخلف (تغيير في قيمة x)
+            const diff = Math.abs(leftEar.x - leftShoulder.x);
+            
+            if (diff > 0.08) { 
+               exerciseStage = "back"; // الرأس رجع للخلف
+            }
+            if (diff < 0.05 && exerciseStage === "back") {
+               exerciseStage = "start";
+               repsCount++;
+               document.getElementById('liveReps').innerText = repsCount;
+               speak(`رائع، ${repsCount}`); // تنبيه صوتي
+            }
 
-            exercises = `
+            exercisesHTML = `
               <div class="space-y-2">
-                <div class="bg-blue-100 p-3 rounded-xl">
-                  <h3 class="font-bold">Chin Tuck</h3>
-                  <p>3 Sets × 10 Reps</p>
+                <div class="bg-blue-600 text-white p-4 rounded-xl shadow-lg border-2 border-yellow-400">
+                  <h3 class="font-bold text-lg">تمرين جاري الآن: Chin Tuck</h3>
+                  <p class="text-sm opacity-90">اسحب ذقنك للخلف مع الحفاظ على استقامة الرقبة</p>
+                  <div class="mt-2 text-2xl font-black">التكرارات: <span id="liveReps">${repsCount}</span> / 10</div>
                 </div>
 
-                <div class="bg-blue-100 p-3 rounded-xl">
-                  <h3 class="font-bold">Neck Stretch</h3>
+                <div class="bg-blue-100 p-3 rounded-xl opacity-60">
+                  <h3 class="font-bold text-blue-900">Next: Neck Stretch</h3>
                   <p>Hold 30 Seconds</p>
-                </div>
-
-                <div class="bg-blue-100 p-3 rounded-xl">
-                  <h3 class="font-bold">Cervical Retraction</h3>
-                  <p>3 Sets × 15 Reps</p>
                 </div>
               </div>
             `;
+          } else {
+            repsCount = 0; // إعادة التصفير إذا تحسنت الوضعية
           }
 
           resultBox.innerHTML = diagnosis;
-          exerciseBox.innerHTML = exercises;
+          exerciseBox.innerHTML = exercisesHTML;
         }
 
         detect();
-        status.innerText = 'AI يعمل الآن ✅';
+        status.innerText = 'AI يعمل الآن - ابدأ التمرين ✅';
+        speak("بدأنا التحليل، يرجى الوقوف بشكل جانبي لبدء تمرين الذقن");
       });
     };
-  </script>  <style>
-    body {
-      background: #f3f7fb;
-      font-family: Arial;
-    }
-
-    .glass {
-      background: rgba(255,255,255,0.7);
-      backdrop-filter: blur(10px);
-    }
-  </style></head><body>  <header class="bg-blue-900 text-white p-5 shadow-xl">
+  </script>
+  <style>
+    body { background: #f3f7fb; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; }
+    .glass { background: rgba(255,255,255,0.7); backdrop-filter: blur(10px); }
+  </style>
+</head>
+<body>
+  <header class="bg-blue-900 text-white p-5 shadow-xl">
     <h1 class="text-3xl font-bold text-center">AI Physioh Pro</h1>
-    <p class="text-center mt-2">AI Physiotherapy & Posture Analysis</p>
-  </header>  <main class="max-w-6xl mx-auto p-4"><div class="grid md:grid-cols-2 gap-6 mt-6">
-
-  <div class="glass rounded-3xl shadow-2xl p-4">
-    <h2 class="text-2xl font-bold mb-4 text-center">الكاميرا والتحليل</h2>
-
-    <div class="relative rounded-2xl overflow-hidden">
-      <video
-        id="video"
-        autoplay
-        playsinline
-        class="w-full rounded-2xl"
-      ></video>
-
-      <canvas
-        id="canvas"
-        class="absolute top-0 left-0 w-full h-full"
-      ></canvas>
-    </div>
-
-    <button
-      onclick="startPoseDetection()"
-      class="w-full mt-4 bg-blue-700 hover:bg-blue-800 text-white p-4 rounded-2xl text-lg font-bold transition"
-    >
-      تشغيل الذكاء الاصطناعي
-    </button>
-
-    <div
-      id="status"
-      class="mt-4 text-center font-bold text-blue-900"
-    >
-      جاهز للتشغيل
-    </div>
-  </div>
-
-  <div class="space-y-6">
-
-    <div class="glass rounded-3xl shadow-2xl p-6">
-      <h2 class="text-2xl font-bold mb-4">نتيجة التحليل</h2>
-
-      <div
-        id="resultBox"
-        class="bg-green-100 p-5 rounded-2xl text-xl font-bold"
-      >
-        لا توجد نتائج بعد
+    <p class="text-center mt-2">نظام المتابعة الذكي للتمارين العلاجية</p>
+  </header>
+  
+  <main class="max-w-6xl mx-auto p-4">
+    <div class="grid md:grid-cols-2 gap-6 mt-6">
+      <div class="glass rounded-3xl shadow-2xl p-4 border-t-4 border-blue-500">
+        <h2 class="text-2xl font-bold mb-4 text-center">المعالج الرقمي (كاميرا)</h2>
+        <div class="relative rounded-2xl overflow-hidden bg-black aspect-video">
+          <video id="video" autoplay playsinline class="w-full h-full object-cover"></video>
+          <canvas id="canvas" class="absolute top-0 left-0 w-full h-full"></canvas>
+        </div>
+        <button onclick="startPoseDetection()" class="w-full mt-4 bg-blue-700 hover:bg-blue-800 text-white p-4 rounded-2xl text-lg font-bold transition shadow-lg">
+          ابدأ الجلسة العلاجية
+        </button>
+        <div id="status" class="mt-4 text-center font-bold text-blue-900">جاهز للتشغيل</div>
       </div>
-    </div>
 
-    <div class="glass rounded-3xl shadow-2xl p-6">
-      <h2 class="text-2xl font-bold mb-4">التمارين العلاجية</h2>
+      <div class="space-y-6">
+        <div class="glass rounded-3xl shadow-2xl p-6">
+          <h2 class="text-2xl font-bold mb-4 text-blue-900">تحليل الوضعية</h2>
+          <div id="resultBox" class="bg-white p-5 rounded-2xl text-xl font-bold border-r-8 border-blue-500">
+            في انتظار البيانات...
+          </div>
+        </div>
 
-      <div id="exerciseBox" class="space-y-3">
-        <div class="bg-gray-100 p-4 rounded-xl">
-          سيتم عرض التمارين بعد التحليل
+        <div class="glass rounded-3xl shadow-2xl p-6">
+          <h2 class="text-2xl font-bold mb-4 text-blue-900">متابعة التكرارات (Live)</h2>
+          <div id="exerciseBox" class="space-y-3">
+            <div class="bg-gray-100 p-4 rounded-xl text-gray-500 italic">
+              قف بشكل جانبي للكاميرا ليتم رصد تكراراتك تلقائياً
+            </div>
+          </div>
+        </div>
+        
+        <div class="glass rounded-3xl shadow-2xl p-6">
+            <h2 class="text-2xl font-bold mb-4 text-blue-900">تقدم المريض</h2>
+            <div class="grid grid-cols-2 gap-4 text-center">
+              <div class="bg-white p-3 rounded-xl shadow-sm"><h4 class="text-xs text-gray-500">الألم</h4><p class="text-xl font-bold">3/10</p></div>
+              <div class="bg-white p-3 rounded-xl shadow-sm"><h4 class="text-xs text-gray-500">الجلسات</h4><p class="text-xl font-bold">12</p></div>
+              <div class="bg-white p-3 rounded-xl shadow-sm"><h4 class="text-xs text-gray-500">المرونة</h4><p class="text-xl font-bold">85%</p></div>
+              <div class="bg-white p-3 rounded-xl shadow-sm"><h4 class="text-xs text-gray-500">التحسن</h4><p class="text-xl font-bold text-green-600">70%</p></div>
+            </div>
         </div>
       </div>
     </div>
-
-    <div class="glass rounded-3xl shadow-2xl p-6">
-      <h2 class="text-2xl font-bold mb-4">لوحة المريض</h2>
-
-      <div class="grid grid-cols-2 gap-4">
-
-        <div class="bg-white p-4 rounded-2xl shadow">
-          <h3 class="font-bold">Pain Score</h3>
-          <p class="text-3xl mt-2">3/10</p>
-        </div>
-
-        <div class="bg-white p-4 rounded-2xl shadow">
-          <h3 class="font-bold">Sessions</h3>
-          <p class="text-3xl mt-2">12</p>
-        </div>
-
-        <div class="bg-white p-4 rounded-2xl shadow">
-          <h3 class="font-bold">ROM</h3>
-          <p class="text-3xl mt-2">85%</p>
-        </div>
-
-        <div class="bg-white p-4 rounded-2xl shadow">
-          <h3 class="font-bold">Progress</h3>
-          <p class="text-3xl mt-2">70%</p>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<section class="mt-10 glass rounded-3xl shadow-2xl p-6">
-  <h2 class="text-3xl font-bold mb-6 text-center">الأمراض المدعومة</h2>
-
-  <div class="grid md:grid-cols-3 gap-4">
-
-    <div class="bg-white p-5 rounded-2xl shadow-lg">
-      <h3 class="font-bold text-xl">Forward Head</h3>
-      <p class="mt-2 text-gray-700">
-        تحليل وضعية الرقبة والرأس.
-      </p>
-    </div>
-
-    <div class="bg-white p-5 rounded-2xl shadow-lg">
-      <h3 class="font-bold text-xl">Rounded Shoulder</h3>
-      <p class="mt-2 text-gray-700">
-        تحليل الكتفين والانحناء.
-      </p>
-    </div>
-
-    <div class="bg-white p-5 rounded-2xl shadow-lg">
-      <h3 class="font-bold text-xl">Low Back Pain</h3>
-      <p class="mt-2 text-gray-700">
-        تقييم أسفل الظهر والحركة.
-      </p>
-    </div>
-
-  </div>
-</section>
-
-  </main></body>
+  </main>
+</body>
 </html>
