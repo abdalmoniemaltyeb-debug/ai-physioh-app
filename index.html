@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kaia-Style AI Physio | نظام التأهيل الذكي</title>
+    <title>AI-Spine Care Pro | نظام تأهيل الظهر الاحترافي</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
@@ -11,154 +11,176 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
     <style>
-        :root { 
-            --kaia-blue: #0052cc; --dark: #0a0a0a; --panel: #1a1a1a;
-            --success: #00c853; --warning: #ffd600; --danger: #ff1744;
-        }
+        :root { --bg: #0f172a; --card: #1e293b; --accent: #38bdf8; --danger: #f43f5e; --success: #10b981; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); color: white; margin: 0; padding: 20px; overflow-x: hidden; }
         
-        body { 
-            background: var(--dark); color: white; font-family: 'Inter', sans-serif;
-            margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden;
-        }
+        .container { max-width: 900px; margin: auto; }
+        .page { display: none; animation: fadeIn 0.4s ease-out; }
+        .active { display: block; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 
-        /* واجهة الكاميرا الاحترافية */
-        .viewport { 
-            position: relative; flex-grow: 1; background: #000; 
-            display: flex; justify-content: center; align-items: center;
-        }
-        #video-input { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
-        #output-canvas { position: absolute; width: 100%; height: 100%; transform: scaleX(-1); }
-
-        /* لوحة التحكم الجانبية (مثل Kaia) */
-        .side-panel {
-            position: absolute; left: 20px; top: 20px; bottom: 20px;
-            width: 280px; background: rgba(26, 26, 26, 0.85);
-            backdrop-filter: blur(10px); border-radius: 24px;
-            padding: 24px; border: 1px solid rgba(255,255,255,0.1);
-            display: flex; flex-direction: column; gap: 20px; z-index: 10;
-        }
-
-        .stat-card { background: rgba(255,255,255,0.05); padding: 15px; border-radius: 16px; text-align: center; }
-        .stat-value { font-size: 32px; font-weight: bold; color: var(--kaia-blue); }
+        /* Card Design (McKinsey Style) */
+        .card { background: var(--card); padding: 30px; border-radius: 20px; border: 1px solid #334155; margin-bottom: 20px; box-shadow: 0 10px 30px rgba(0,0,0,0.3); }
+        h1, h2, h3 { color: white; margin-top: 0; }
+        select, input { width: 100%; padding: 15px; margin: 10px 0; border-radius: 10px; background: #0f172a; color: white; border: 1px solid #475569; font-size: 1rem; }
         
-        /* شريط التنبيهات العلوي */
-        .alert-bar {
-            position: absolute; top: 20px; left: 50%; transform: translateX(-50%);
-            padding: 12px 40px; border-radius: 50px; font-weight: bold;
-            font-size: 18px; transition: 0.3s; z-index: 10;
-        }
+        button { background: var(--accent); color: var(--bg); border: none; padding: 18px 25px; border-radius: 12px; font-weight: bold; cursor: pointer; transition: 0.3s; width: 100%; font-size: 1.1rem; }
+        button:hover { filter: brightness(1.2); transform: translateY(-2px); }
 
-        .btn-end {
-            background: var(--danger); color: white; border: none;
-            padding: 15px; border-radius: 12px; font-weight: bold; cursor: pointer;
-            margin-top: auto;
-        }
+        /* Exercise Library Tiles */
+        .library-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 15px; margin: 20px 0; }
+        .lib-item { background: #334155; padding: 18px; border-radius: 15px; border-right: 4px solid var(--accent); position: relative; }
 
-        /* شاشة البداية */
-        #splash {
-            position: fixed; inset: 0; background: var(--dark);
-            z-index: 100; display: flex; flex-direction: column;
-            justify-content: center; align-items: center; padding: 20px;
-        }
+        /* Camera Box */
+        .camera-box { position: relative; width: 100%; border-radius: 20px; overflow: hidden; background: #000; box-shadow: 0 0 30px rgba(56, 189, 248, 0.2); }
+        #video-input { width: 100%; height: auto; transform: scaleX(-1); }
+        #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+
+        /* HUD & Stats (Kaia Style) */
+        .ai-hud { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.9); padding: 12px; border-radius: 12px; border: 1px solid var(--accent); text-align: center; }
+        .stats-bar { display: flex; gap: 10px; margin-top: 15px; }
+        .stat { flex: 1; background: #1e293b; padding: 15px; border-radius: 15px; text-align: center; border-bottom: 3px solid var(--accent); }
     </style>
 </head>
 <body>
 
-<div id="splash">
-    <div style="max-width: 400px; text-align: center;">
-        <h1 style="color: var(--kaia-blue);">Kaia AI Physio</h1>
-        <p>مرحباً بك في جلسة التأهيل الذكية. يرجى اختيار نوع الألم المكتشف:</p>
-        <select id="protocol" style="width: 100%; padding: 15px; border-radius: 12px; margin: 20px 0; background: #222; color: white;">
-            <option value="disc">ألم يزداد عند الانحناء (الديسك)</option>
-            <option value="stenosis">ألم يزداد عند الوقوف (تضيق القناة)</option>
-        </select>
-        <button onclick="startSession()" style="background: var(--kaia-blue); color: white; width: 100%; padding: 18px; border-radius: 14px; border: none; font-weight: bold; cursor: pointer;">بدء التمرين الآن</button>
-    </div>
-</div>
+<div class="container">
+    <div id="p1" class="page active">
+        <div class="card">
+            <span style="color:var(--accent); font-weight:bold; letter-spacing:2px; font-size:0.9rem;">AI-Spine ASSESSMENT</span>
+            <h1 style="margin-top:10px;">📋 تشخيص آلام الظهر</h1>
+            <p style="color:#94a3b8;">أجب بدقة لتحديد التمارين الآمنة لحالتك بناءً على البروتوكولات العالمية.</p>
+            
+            <label>أين تشعر بالألم؟</label>
+            <select id="q1">
+                <option value="back">أسفل الظهر فقط</option>
+                <option value="leg">يمتد للأرجل (عرق نسا)</option>
+            </select>
+            
+            <label>هل يزيد الألم عند الانحناء للأمام؟</label>
+            <select id="q2">
+                <option value="yes">نعم (غالباً ديسك)</option>
+                <option value="no">لا (غالباً تضيق قناة)</option>
+            </select>
 
-<div class="viewport">
-    <div id="alert" class="alert-bar" style="background: var(--success);">استعد للبدء...</div>
-    
-    <div class="side-panel">
-        <h3 id="ex-name" style="margin:0">تمرين فرد الظهر</h3>
-        <p style="font-size: 12px; color: #888;">حافظ على ثبات حوضك</p>
-        
-        <div class="stat-card">
-            <div style="font-size: 12px;">التكرارات</div>
-            <div id="reps" class="stat-value">0</div>
+            <button onclick="analyzeDiagnosis()">تحليل الحالة وتحديد الخطة ←</button>
         </div>
-
-        <div class="stat-card">
-            <div style="font-size: 12px;">دقة الحركة</div>
-            <div id="accuracy" class="stat-value">--</div>
-        </div>
-
-        <button class="btn-end" onclick="location.reload()">إنهاء الجلسة</button>
     </div>
 
-    <video id="video-input"></video>
-    <canvas id="output-canvas"></canvas>
+    <div id="p2" class="page">
+        <div class="card">
+            <h2 id="diag-title">📚 مكتبة بروتوكول التأهيل</h2>
+            <div id="exercise-list" class="library-grid"></div>
+            <p style="color: var(--accent); font-size: 0.9rem; text-align:center;">* تأكد من الوقوف بشكل جانبي تماماً للكاميرا.</p>
+            <button onclick="startMonitoring()">بدء المراقبة الذكية بالذكاء الاصطناعي 🎥</button>
+            <button onclick="nav('p1')" style="background:#475569; margin-top:10px;">رجوع</button>
+        </div>
+    </div>
+
+    <div id="p3" class="page">
+        <div class="card" style="padding:10px;">
+            <div class="camera-box">
+                <div id="ai-hud" class="ai-hud">جاري تحليل وضعية الجسم الجانبية...</div>
+                <video id="video-input"></video>
+                <canvas id="output-canvas"></canvas>
+            </div>
+            <div class="stats-bar">
+                <div class="stat">العداد<br><b id="count" style="font-size:1.8rem; color:var(--accent);">0</b></div>
+                <div class="stat">انحناء الظهر<br><b id="angle" style="font-size:1.8rem; color:var(--accent);">0°</b></div>
+            </div>
+            <button style="background:var(--danger); margin-top:15px;" onclick="location.reload()">إنهاء الجلسة</button>
+        </div>
+    </div>
 </div>
 
 <script>
-    let protocol = 'disc';
-    let reps = 0;
-    let stage = 'down';
-    let synth = window.speechSynthesis;
+    const protocols = {
+        'disc': { 
+            title: 'بروتوكول الانزلاق الغضروفي (Disc Prolapse)',
+            exs: [{n:'Extension (McKenzie)', d:'فرد الظهر للخلف لتخفيف ضغط الديسك.'}, {n:'Prone Cobra', d:'تقوية عضلات الظهر العميقة.'}]
+        },
+        'stenosis': { 
+            title: 'بروتوكول تضيق القناة (Spinal Stenosis)',
+            exs: [{n:'Pelvic Tilt', d:'تقليل تقوس الظهر لتوسيع القناة العصبية.'}, {n:'Child Pose', d:'إطالة عضلات الفقرات القطنية.'}]
+        }
+    };
+
+    let userProtocol = '';
+    let counter = 0;
+    let stage = null;
+    let voiceSynth = window.speechSynthesis;
+
+    function nav(id) {
+        document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+        document.getElementById(id).classList.add('active');
+    }
 
     function speak(text) {
-        if (synth.speaking) return;
-        let utter = new SpeechSynthesisUtterance(text);
-        utter.lang = 'ar-SA';
-        synth.speak(utter);
+        if (voiceSynth.speaking) return; // منع التداخل
+        let utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'ar-SA';
+        utterance.rate = 0.9;
+        voiceSynth.speak(utterance);
     }
 
-    function startSession() {
-        protocol = document.getElementById('protocol').value;
-        document.getElementById('splash').style.display = 'none';
-        speak("تم تفعيل بروتوكول التأهيل. قف بشكل جانبي للكاميرا.");
+    function analyzeDiagnosis() {
+        const moveInput = document.getElementById('q2').value;
+        userProtocol = (moveInput === 'yes') ? 'disc' : 'stenosis';
+        
+        document.getElementById('diag-title').innerText = protocols[userProtocol].title;
+        const list = document.getElementById('exercise-list');
+        list.innerHTML = '';
+        protocols[userProtocol].exs.forEach(ex => {
+            list.innerHTML += `<div class="lib-item"><h3>✅ ${ex.n}</h3><p style="font-size:0.9rem; color:#94a3b8;">${ex.d}</p></div>`;
+        });
+        nav('p2');
+    }
+
+    function startMonitoring() {
+        nav('p3');
         initAI();
+        speak("تم تفعيل بروتوكول التأهيل. قف بشكل جانبي للكاميرا.");
     }
 
+    // الذكاء الاصطناعي (Logic)
     const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
-    pose.setOptions({ modelComplexity: 0, minDetectionConfidence: 0.5 });
+    pose.setOptions({modelComplexity: 0, minDetectionConfidence: 0.5}); // ضبط أقصى سرعة
 
     pose.onResults((res) => {
         if (!res.poseLandmarks) return;
         const ctx = canvasCtx;
         ctx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-
-        const lm = res.poseLandmarks;
-        const side = lm[12].visibility > lm[11].visibility ? {s:12, h:24, k:26} : {s:11, h:23, k:25};
-        const angle = calculateAngle(lm[side.s], lm[side.h], lm[side.k]);
         
-        // رسم النقاط بأسلوب Kaia (تغيير اللون بناءً على الدقة)
-        let color = "#00c853"; // أخضر
-        const alertBox = document.getElementById('alert');
+        const lm = res.poseLandmarks;
+        const hud = document.getElementById('ai-hud');
 
-        if (protocol === 'disc' && angle < 155) {
-            color = "#ff1744"; // أحمر
-            alertBox.innerText = "🚨 ارجع للخلف! ظهرك منحني";
-            alertBox.style.background = "var(--danger)";
+        // تصحيح المتحسس الجانبي: نتحقق من الجانب المواجه للكاميرا
+        const side = lm[12].visibility > lm[11].visibility ? {s:12, h:24, k:26} : {s:11, h:23, k:25};
+        let angle = calculateAngle(lm[side.s], lm[side.h], lm[side.k]);
+        
+        document.getElementById('angle').innerText = Math.round(angle) + "°";
+
+        // التنبيه الذكي بالصوت بناءً على الحالة
+        if (userProtocol === 'disc' && angle < 145) {
+            hud.innerText = "🚨 خطأ: لا تنحنِ للأمام! حافظ على استقامة الظهر";
+            hud.style.color = "var(--danger)";
+            drawConnectors(ctx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#f43f5e', lineWidth: 4});
             speak("انتبه، لا تنحنِ للأمام");
         } else {
-            alertBox.innerText = "وضعية ممتازة ✅";
-            alertBox.style.background = "var(--success)";
+            hud.innerText = "وضعية سليمة - واصل التمرين ✅";
+            hud.style.color = "var(--accent)";
+            drawConnectors(ctx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#38bdf8', lineWidth: 2});
             
-            // منطق العداد
-            if (angle > 175) stage = "down";
-            if (angle < 165 && stage === "down") { 
-                reps++; 
+            // عدّ التكرارات (Logic)
+            if (angle > 170) stage = "down";
+            if (angle < 160 && stage === "down") { 
+                repsCounter++; 
                 stage = "up"; 
-                document.getElementById('reps').innerText = reps;
-                speak(reps.toString());
+                document.getElementById('count').innerText = repsCounter;
+                speak(repsCounter.toString());
             }
         }
-
-        drawConnectors(ctx, lm, POSE_CONNECTIONS, {color: color, lineWidth: 4});
-        drawLandmarks(ctx, [lm[side.s], lm[side.h], lm[side.k]], {color: '#fff', lineWidth: 2, radius: 5});
-        
-        document.getElementById('accuracy').innerText = Math.round(angle) + "°";
+        ctx.restore();
     });
 
     function calculateAngle(a, b, c) {
@@ -172,11 +194,10 @@
     const canvasCtx = canvasElement.getContext('2d');
 
     function initAI() {
-        const camera = new Camera(videoElement, {
+        new Camera(videoElement, {
             onFrame: async () => { await pose.send({image: videoElement}); },
             width: 640, height: 480
-        });
-        camera.start();
+        }).start();
     }
 </script>
 </body>
