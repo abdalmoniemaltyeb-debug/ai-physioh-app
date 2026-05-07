@@ -3,179 +3,139 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Physio Pro - Web System</title>
-    
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>نظام التأهيل الذكي - تشغيل فوري</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
 
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
-        body { font-family: 'Tajawal', sans-serif; background-color: #0f172a; color: white; }
-        .video-container { position: relative; width: 100%; max-width: 720px; border-radius: 24px; overflow: hidden; border: 4px solid #1e293b; background: black; }
-        #output_canvas { width: 100%; height: auto; transform: scaleX(-1); }
-        #input_video { display: none; }
+        :root { --primary: #0ea5e9; --success: #22c55e; --warning: #f59e0b; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f1f5f9; margin: 0; padding: 15px; }
+        .container { max-width: 600px; margin: auto; }
+        
+        /* نسق الكاميرا الاحترافي */
+        .camera-card { 
+            position: relative; width: 100%; aspect-ratio: 3/4; 
+            background: #000; border-radius: 30px; overflow: hidden;
+            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); border: 4px solid white;
+        }
+        #video-input { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
+
+        /* لوحة البيانات */
+        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
+        .stat-item { background: white; padding: 15px; border-radius: 20px; text-align: center; }
+        .val { display: block; font-size: 2rem; font-weight: bold; color: var(--primary); }
+
+        /* صندوق التعليمات (مثل الصورة) */
+        #instruction-box { 
+            background: #fef9c3; color: #854d0e; padding: 20px; border-radius: 20px; 
+            margin-top: 15px; text-align: center; font-weight: bold; border: 1px solid #fde68a;
+        }
+        
+        #guide-text { background: white; padding: 15px; border-radius: 20px; margin-top: 10px; font-size: 0.9rem; line-height: 1.5; }
+        .btn-main { background: var(--primary); color: white; border: none; width: 100%; padding: 15px; border-radius: 20px; font-weight: bold; margin-top: 10px; cursor: pointer; }
     </style>
 </head>
-<body class="min-h-screen p-4 md:p-8 flex flex-col items-center">
+<body>
 
-    <header class="text-center mb-10">
-        <h1 class="text-4xl font-bold text-blue-400 italic">AI Physio <span class="text-white">Pro</span></h1>
-        <p class="text-slate-400 mt-2 text-lg">نظام التأهيل الذكي القائم على رؤية الكمبيوتر</p>
-    </header>
+<div class="container">
+    <div id="setup">
+        <div class="stat-item">
+            <h2>مرحباً دكتور عبد المنعم 🦾</h2>
+            <p>اختر نوع التمرين لبدء الرصد الآلي:</p>
+            <select id="ex-type" style="width:100%; padding:12px; border-radius:10px; margin-bottom:15px;">
+                <option value="neck">تمارين الرقبة (Neck Retraction)</option>
+                <option value="back">تمارين أعلى الظهر (Scapular)</option>
+                <option value="shoulder">تمارين الكتف (Wall Climbing)</option>
+            </select>
+            <button class="btn-main" onclick="init()">بدء الكاميرا الآن</button>
+        </div>
+    </div>
 
-    <main class="w-full max-w-6xl grid lg:grid-cols-3 gap-8">
-        
-        <div class="lg:col-span-2 flex flex-col items-center">
-            <div class="video-container shadow-2xl shadow-blue-500/10">
-                <canvas id="output_canvas"></canvas>
-                <video id="input_video"></video>
-            </div>
-            
-            <div class="grid grid-cols-2 gap-4 w-full mt-6">
-                <button onclick="setExercise('elbow')" class="bg-blue-600 hover:bg-blue-500 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">تمرين الكوع</button>
-                <button onclick="setExercise('shoulder')" class="bg-slate-700 hover:bg-slate-600 py-4 rounded-2xl font-bold transition-all shadow-lg active:scale-95">تمرين الكتف</button>
-            </div>
+    <div id="active-workout" style="display:none;">
+        <div class="camera-card">
+            <video id="video-input" autoplay playsinline></video>
+            <canvas id="output-canvas"></canvas>
         </div>
 
-        <div class="space-y-6">
-            <div class="bg-slate-800 p-8 rounded-[2rem] border border-slate-700 text-center shadow-xl">
-                <h3 class="text-slate-400 font-bold mb-2">التكرارات</h3>
-                <span id="counter" class="text-9xl font-black text-white">0</span>
-            </div>
-
-            <div class="bg-slate-800 p-6 rounded-[2rem] border border-slate-700 space-y-4">
-                <div class="flex justify-between items-center border-b border-slate-700 pb-4">
-                    <span class="text-slate-400">الزاوية الحالية:</span>
-                    <span id="angle_text" class="text-2xl font-bold text-yellow-400">0°</span>
-                </div>
-                <div class="text-center py-2">
-                    <p id="feedback" class="text-xl font-bold text-blue-300">جاهز للبدء</p>
-                </div>
-            </div>
-
-            <button onclick="exportCSV()" class="w-full bg-emerald-600 hover:bg-emerald-500 py-5 rounded-2xl font-bold shadow-lg transition-all flex justify-center items-center gap-2">
-                <span>📥</span> تصدير تقرير الجلسة
-            </button>
+        <div class="stats">
+            <div class="stat-item"><span>العدات</span><span id="counter" class="val">0</span></div>
+            <div class="stat-item"><span>الزاوية</span><span id="angle" class="val">0°</span></div>
         </div>
-    </main>
 
-    <script>
-        const videoElement = document.getElementById('input_video');
-        const canvasElement = document.getElementById('output_canvas');
-        const canvasCtx = canvasElement.getContext('2d');
+        <div id="instruction-box">💡 قف بوضوح أمام الكاميرا...</div>
         
-        let counter = 0;
-        let stage = "down";
-        let currentEx = "elbow";
-        let sessionData = [];
+        <div id="guide-text">
+            <b id="guide-title"></b>: <span id="guide-desc"></span>
+        </div>
+    </div>
+</div>
 
-        // محرك نطق بسيط للمتصفح
-        function speak(text) {
-            const utterance = new SpeechSynthesisUtterance(text);
-            utterance.lang = 'ar-SA';
-            window.speechSynthesis.speak(utterance);
-        }
+<script>
+    const exercises = {
+        neck: { t: "سحب الذقن", d: "اسحب ذقنك للخلف (Double Chin) بدون خفض الرأس.", msg: "ارفع ذقنك واسحب للخلف" },
+        back: { t: "ضم الكتف", d: "اسحب لوحي الكتف للخلف كأنك تغلق سوستة الظهر.", msg: "افرد ظهرك وضم الكتفين" },
+        shoulder: { t: "تسلق الحائط", d: "ارفع يدك على الحائط تدريجياً ببطء.", msg: "ارفع يدك للأعلى" }
+    };
 
-        function setExercise(ex) {
-            currentEx = ex;
-            counter = 0;
-            document.getElementById('counter').innerText = "0";
-            speak("تم تغيير التمرين");
-        }
+    let count = 0, stage = "up", synth = window.speechSynthesis;
 
-        function calculateAngle(A, B, C) {
-            let rad = Math.atan2(C.y - B.y, C.x - B.x) - Math.atan2(A.y - B.y, A.x - B.x);
-            let angle = Math.abs(rad * 180.0 / Math.PI);
-            if (angle > 180.0) angle = 360 - angle;
-            return angle;
-        }
+    function speak(t) { if(!synth.speaking) { let u = new SpeechSynthesisUtterance(t); u.lang='ar-SA'; synth.speak(u); } }
 
-        function onResults(results) {
-            // إعداد أبعاد الكانفاس
-            canvasElement.width = videoElement.videoWidth;
-            canvasElement.height = videoElement.videoHeight;
+    async function init() {
+        const type = document.getElementById('ex-type').value;
+        document.getElementById('guide-title').innerText = exercises[type].t;
+        document.getElementById('guide-desc').innerText = exercises[type].d;
+        document.getElementById('setup').style.display = 'none';
+        document.getElementById('active-workout').style.display = 'block';
 
-            canvasCtx.save();
-            canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-            canvasCtx.drawImage(results.image, 0, 0, canvasElement.width, canvasElement.height);
+        const video = document.getElementById('video-input');
+        const canvas = document.getElementById('output-canvas');
+        const ctx = canvas.getContext('2d');
 
-            if (results.poseLandmarks) {
-                const landmarks = results.poseLandmarks;
-                
-                // تحديد النقاط (Right Side)
-                const shoulder = landmarks[12];
-                const elbow = landmarks[14];
-                const wrist = landmarks[16];
-                const hip = landmarks[24];
+        const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
 
-                let angle = 0;
-                if (currentEx === "elbow") {
-                    angle = calculateAngle(shoulder, elbow, wrist);
-                } else {
-                    angle = calculateAngle(hip, shoulder, elbow);
-                }
+        pose.onResults((res) => {
+            if (!res.poseLandmarks) return;
+            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            drawConnectors(ctx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#0ea5e9', lineWidth: 3});
 
-                document.getElementById('angle_text').innerText = Math.round(angle) + "°";
+            const lm = res.poseLandmarks;
+            // حساب زاوية الجذع (كتف - حوض - ركبة)
+            const ang = calculateAngle(lm[11], lm[23], lm[25]);
+            document.getElementById('angle').innerText = Math.round(ang) + "°";
 
-                // منطق العد
-                if (angle > 160) {
-                    if (stage === "up") {
-                        counter++;
-                        document.getElementById('counter').innerText = counter;
-                        speak(counter);
-                        sessionData.push({ time: new Date().toLocaleTimeString(), rep: counter });
-                    }
+            // منطق العد التلقائي
+            if (ang < 160) {
+                if (stage === "up") {
+                    document.getElementById('instruction-box').innerText = "ممتاز! استمر في الحركة";
+                    document.getElementById('instruction-box').style.background = "#dcfce7";
                     stage = "down";
-                    document.getElementById('feedback').innerText = "حركة كاملة ✅";
                 }
-                if (angle < 40) {
-                    stage = "up";
-                    document.getElementById('feedback').innerText = "افرد المفصل الآن";
-                }
-
-                // رسم الهيكل العظمي
-                drawConnectors(canvasCtx, landmarks, POSE_CONNECTIONS, {color: '#3b82f6', lineWidth: 4});
-                drawLandmarks(canvasCtx, landmarks, {color: '#ffffff', lineWidth: 2, radius: 4});
             }
-            canvasCtx.restore();
-        }
-
-        const pose = new Pose({
-            locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${file}`
+            if (ang > 175 && stage === "down") {
+                count++;
+                document.getElementById('counter').innerText = count;
+                document.getElementById('instruction-box').innerText = "✅ رائعة! عدة مكتملة";
+                document.getElementById('instruction-box').style.background = "#fef9c3";
+                speak(count.toString());
+                stage = "up";
+            }
         });
 
-        pose.setOptions({
-            modelComplexity: 1,
-            smoothLandmarks: true,
-            minDetectionConfidence: 0.5,
-            minTrackingConfidence: 0.5
-        });
-
-        pose.onResults(onResults);
-
-        const camera = new Camera(videoElement, {
-            onFrame: async () => {
-                await pose.send({image: videoElement});
-            },
-            width: 1280,
-            height: 720
-        });
+        const camera = new Camera(video, { onFrame: async () => { await pose.send({image: video}); }, width: 640, height: 480 });
         camera.start();
+    }
 
-        function exportCSV() {
-            if (sessionData.length === 0) return alert("لا توجد بيانات لتصديرها");
-            let csvContent = "data:text/csv;charset=utf-8,Time,Repetition\n";
-            sessionData.forEach(row => csvContent += `${row.time},${row.rep}\n`);
-            const encodedUri = encodeURI(csvContent);
-            const link = document.createElement("a");
-            link.setAttribute("href", encodedUri);
-            link.setAttribute("download", "Physio_Report.csv");
-            document.body.appendChild(link);
-            link.click();
-        }
-    </script>
+    function calculateAngle(a, b, c) {
+        let r = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
+        let ang = Math.abs(r * 180 / Math.PI);
+        return ang > 180 ? 360 - ang : ang;
+    }
+</script>
 </body>
 </html>
