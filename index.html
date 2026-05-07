@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI-Physio Elite | نظام التأهيل الشامل</title>
+    <title>AI-Physio Pro | منصة التأهيل الرقمي المتكاملة</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
@@ -11,144 +11,204 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
     <style>
-        :root { --accent: #38bdf8; --bg: #020617; --card: #0f172a; --danger: #ef4444; --success: #22c55e; }
-        body { background: var(--bg); color: white; font-family: 'Inter', sans-serif; margin: 0; padding: 20px; text-align: center; }
-        .page { display: none; max-width: 800px; margin: auto; animation: fadeIn 0.3s; }
+        :root { --accent: #0ea5e9; --bg: #020617; --panel: #0f172a; --success: #22c55e; --danger: #ef4444; }
+        body { background: var(--bg); color: #f8fafc; font-family: 'Segoe UI', Tahoma, sans-serif; margin: 0; padding: 15px; }
+        .page { display: none; max-width: 1000px; margin: auto; animation: slideIn 0.4s ease-out; }
         .active { display: block; }
-        .card { background: var(--card); padding: 30px; border-radius: 20px; border: 1px solid #1e293b; margin-bottom: 20px; }
-        select, button { width: 100%; padding: 15px; border-radius: 12px; margin: 10px 0; font-size: 16px; cursor: pointer; }
-        button { background: var(--accent); color: var(--bg); font-weight: bold; border: none; }
-        .camera-container { position: relative; border-radius: 20px; overflow: hidden; background: #000; aspect-ratio: 4/3; border: 2px solid var(--accent); }
-        #video-input { width: 100%; height: 100%; transform: scaleX(-1); }
+        
+        .card { background: var(--panel); padding: 30px; border-radius: 24px; border: 1px solid #1e293b; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5); margin-bottom: 20px; }
+        h1, h2 { color: var(--accent); margin-top: 0; }
+        input, select, button { width: 100%; padding: 16px; border-radius: 14px; margin: 12px 0; border: 1px solid #334155; font-size: 16px; transition: 0.3s; }
+        input, select { background: #1e293b; color: white; }
+        button { background: var(--accent); color: var(--bg); font-weight: bold; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 10px; }
+        button:hover { filter: brightness(1.2); transform: translateY(-2px); }
+
+        /* منطقة التمرين والكاميرا */
+        .main-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; }
+        .video-container { position: relative; border-radius: 24px; overflow: hidden; background: #000; border: 2px solid #1e293b; height: 500px; }
+        #video-input { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
-        .hud { position: absolute; top: 10px; left: 50%; transform: translateX(-50%); background: rgba(15, 23, 42, 0.9); padding: 10px 20px; border-radius: 10px; border: 1px solid var(--accent); width: 80%; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        
+        .sidebar { background: #1e293b; padding: 25px; border-radius: 24px; display: flex; flex-direction: column; justify-content: space-between; }
+        .stat-box { text-align: center; padding: 20px; background: #0f172a; border-radius: 20px; border-bottom: 4px solid var(--accent); }
+        .rep-count { font-size: 48px; font-weight: bold; color: var(--accent); }
+
+        /* لوحة التقرير الختامي */
+        .report-table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+        .report-table td { padding: 12px; border-bottom: 1px solid #334155; color: #94a3b8; }
+        .report-table b { color: white; }
+        .score-badge { display: inline-block; padding: 10px 20px; border-radius: 50px; font-weight: bold; background: var(--success); color: var(--bg); }
+
+        @keyframes slideIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
 
-<div id="p-select" class="page active">
+<div id="p1" class="page active">
     <div class="card">
-        <h1>AI-Physio Elite 🦾</h1>
-        <p>اختر منطقة الإصابة لتفعيل بروتوكول الذكاء الاصطناعي الخاص بها:</p>
+        <h1><i class="fa-solid fa-notes-medical"></i> تسجيل حالة مريض جديد</h1>
+        <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
+            <input type="text" id="p-name" placeholder="الاسم الكامل للمريض">
+            <input type="number" id="p-age" placeholder="السن">
+        </div>
         
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-            <button onclick="setZone('upper')">الجزء العلوي (الرقبة والكتف)</button>
-            <button onclick="setZone('lower')">الجزء السفلي (أسفل الظهر)</button>
+        <label><i class="fa-solid fa-magnifying-glass-chart"></i> التصنيف الطبي:</label>
+        <select id="p-zone" onchange="loadSpecificExercises()">
+            <option value="">-- اختر منطقة الإصابة --</option>
+            <option value="neck">الرقبة والعمود الفقري العنقي</option>
+            <option value="shoulder">مفصل الكتف والأوتار</option>
+            <option value="elbow">الكوع والساعد</option>
+            <option value="back">أعلى الظهر والمنطقة الصدرية</option>
+        </select>
+        
+        <label><i class="fa-solid fa-person-walking"></i> التمرين العلاجي المخصص:</label>
+        <select id="p-ex-select"></select>
+        
+        <button onclick="launchSession()"><i class="fa-solid fa-play"></i> بدء الجلسة الذكية</button>
+    </div>
+</div>
+
+<div id="p2" class="page">
+    <div class="main-layout">
+        <div class="video-container">
+            <video id="video-input"></video>
+            <canvas id="output-canvas"></canvas>
+            <div id="voice-status" style="position:absolute; bottom:20px; right:20px; background:rgba(0,0,0,0.6); padding:8px 15px; border-radius:50px; font-size:12px;">
+                <i class="fa-solid fa-volume-high"></i> التوجيه الصوتي مفعل
+            </div>
+        </div>
+        
+        <div class="sidebar">
+            <div>
+                <h2 id="ex-title" style="font-size: 20px; margin-bottom:10px;">--</h2>
+                <p id="ex-desc" style="font-size: 14px; color: #94a3b8; line-height: 1.5;"></p>
+                <div class="stat-box" style="margin-top:20px;">
+                    <span>تكرارات مكتملة</span>
+                    <div class="rep-count" id="live-reps">0</div>
+                </div>
+            </div>
+            <button onclick="finishSession()" style="background:var(--danger); color:white;"><i class="fa-solid fa-stop"></i> إنهاء وحفظ التقرير</button>
         </div>
     </div>
 </div>
 
-<div id="p-diag" class="page">
+<div id="p3" class="page">
     <div class="card">
-        <h2 id="diag-title">تشخيص الحالة</h2>
-        <div id="diag-options"></div>
-        <button onclick="startAI()">بدء المراقبة الحية 🎥</button>
-    </div>
-</div>
+        <h1 style="text-align: center;"><i class="fa-solid fa-file-invoice-medical"></i> تقرير الجلسة العلاجية</h1>
+        <div style="text-align: center; margin-bottom: 30px;">
+            <div id="score-text" class="score-badge">أداء ممتاز</div>
+        </div>
+        
+        <table class="report-table">
+            <tr><td>اسم المريض:</td><td><b id="r-name">--</b></td></tr>
+            <tr><td>التشخيص:</td><td><b id="r-diag">--</b></td></tr>
+            <tr><td>التمرين المنجز:</td><td><b id="r-ex">--</b></td></tr>
+            <tr><td>عدد العدات الكلي:</td><td><b id="r-count">0</b></td></tr>
+            <tr><td>تاريخ الجلسة:</td><td><b id="r-date">--</b></td></tr>
+        </table>
 
-<div id="p-cam" class="page">
-    <div class="camera-container">
-        <div id="hud" class="hud">جاري تحليل الحركة...</div>
-        <video id="video-input"></video>
-        <canvas id="output-canvas"></canvas>
+        <div class="card" style="background:#1e293b; border:none;">
+            <h3><i class="fa-solid fa-comment-medical"></i> ملاحظات المعالج الذكي:</h3>
+            <p id="r-feedback" style="color:#94a3b8;"></p>
+        </div>
+
+        <button onclick="location.reload()" style="background:#475569; color:white;"><i class="fa-solid fa-rotate-left"></i> جلسة جديدة</button>
     </div>
-    <div style="display: flex; gap: 10px; margin-top: 15px;">
-        <div class="card" style="flex: 1; margin: 0;">العداد: <br><b id="count" style="font-size: 24px; color: var(--accent);">0</b></div>
-        <div class="card" style="flex: 1; margin: 0;">الزاوية الحالية: <br><b id="angle-val" style="font-size: 24px; color: var(--accent);">0°</b></div>
-    </div>
-    <button style="background: var(--danger); color: white; margin-top: 15px;" onclick="location.reload()">إنهاء الجلسة</button>
 </div>
 
 <script>
-    let zone = ''; // upper or lower
-    let subType = '';
+    const db = {
+        neck: [{n:"Neck Retraction", w:"سحب الذقن للخلف لتصحيح وضع الرقبة.", d:"15 عَدّة"}, {n:"Neck Flexion", w:"ثني الرقبة لأسفل ببطء.", d:"10 عدات"}],
+        shoulder: [{n:"Wall Climbing", w:"تسلق الحائط بالأصابع لرفع مدى الكتف.", d:"12 عَدّة"}],
+        back: [{n:"Scapular Retraction", w:"ضم لوحي الكتف للخلف لفتح الصدر.", d:"15 عَدّة"}]
+    };
+
+    let sessionData = { name: '', age: '', ex: '', reps: 0, startTime: '' };
+
+    function loadSpecificExercises() {
+        const zone = document.getElementById('p-zone').value;
+        const sel = document.getElementById('p-ex-select');
+        sel.innerHTML = '';
+        if(db[zone]) db[zone].forEach((e, i) => sel.innerHTML += `<option value="${i}">${e.n}</option>`);
+    }
+
+    function launchSession() {
+        sessionData.name = document.getElementById('p-name').value;
+        sessionData.age = document.getElementById('p-age').value;
+        if(!sessionData.name) return alert("يرجى إدخال اسم المريض");
+
+        const zone = document.getElementById('p-zone').value;
+        const idx = document.getElementById('p-ex-select').value;
+        const ex = db[zone][idx];
+        
+        sessionData.ex = ex.n;
+        sessionData.startTime = new Date().toLocaleString('ar-EG');
+        
+        document.getElementById('ex-title').innerText = ex.n;
+        document.getElementById('ex-desc').innerText = ex.w;
+        
+        document.getElementById('p1').classList.remove('active');
+        document.getElementById('p2').classList.add('active');
+        
+        speak("بدء الجلسة لـ " + sessionData.name + ". تمرين " + ex.n);
+        initAI();
+    }
+
     let reps = 0;
     let stage = 'start';
     let synth = window.speechSynthesis;
 
-    function setZone(z) {
-        zone = z;
-        const diagTitle = document.getElementById('diag-title');
-        const diagOptions = document.getElementById('diag-options');
-        
-        if (zone === 'upper') {
-            diagTitle.innerText = "إصابات الجزء العلوي";
-            diagOptions.innerHTML = `
-                <select id="sub-type">
-                    <option value="neck">ميلان الرقبة للأمام (Text Neck)</option>
-                    <option value="shoulder">تقوس الكتفين (Rounded Shoulders)</option>
-                </select>
-            `;
+    function speak(t) { 
+        if(synth.speaking) return;
+        let u = new SpeechSynthesisUtterance(t); u.lang = 'ar-SA'; synth.speak(u); 
+    }
+
+    function finishSession() {
+        sessionData.reps = reps;
+        document.getElementById('r-name').innerText = sessionData.name;
+        document.getElementById('r-ex').innerText = sessionData.ex;
+        document.getElementById('r-count').innerText = sessionData.reps;
+        document.getElementById('r-date').innerText = sessionData.startTime;
+        document.getElementById('r-diag').innerText = document.getElementById('p-zone').selectedOptions[0].text;
+
+        // منطق الفيدباك الذكي
+        let fb = "";
+        if(reps >= 10) {
+            fb = "أداء رائع ومبهر! لقد التزمت بالمدى الحركي المطلوب. استمر على هذا المنوال لتحسين مرونة الفقرات.";
+            document.getElementById('score-text').innerText = "أداء ممتاز ⭐⭐⭐";
+            document.getElementById('score-text').style.background = "var(--success)";
         } else {
-            diagTitle.innerText = "إصابات الجزء السفلي";
-            diagOptions.innerHTML = `
-                <select id="sub-type">
-                    <option value="disc">ألم يزداد عند الانحناء (الديسك)</option>
-                    <option value="stenosis">ألم عند الوقوف (تضيق القناة)</option>
-                </select>
-            `;
+            fb = "بداية جيدة، ولكن نحتاج لزيادة عدد التكرارات في المرة القادمة للوصول للفائدة العلاجية القصوى.";
+            document.getElementById('score-text').innerText = "أداء يحتاج تطوير";
+            document.getElementById('score-text').style.background = "#eab308";
         }
-        document.getElementById('p-select').classList.remove('active');
-        document.getElementById('p-diag').classList.add('active');
+        document.getElementById('r-feedback').innerText = fb;
+
+        document.getElementById('p2').classList.remove('active');
+        document.getElementById('p3').classList.add('active');
+        speak("انتهت الجلسة. تم تجهيز تقرير الأداء الخاص بك.");
     }
 
-    function speak(text) {
-        if (synth.speaking) return;
-        let msg = new SpeechSynthesisUtterance(text);
-        msg.lang = 'ar-SA';
-        synth.speak(msg);
-    }
-
-    function startAI() {
-        subType = document.getElementById('sub-type').value;
-        document.getElementById('p-diag').classList.remove('active');
-        document.getElementById('p-cam').classList.add('active');
-        speak("بدء الجلسة. قف بشكل جانبي للكاميرا.");
-        initAI();
-    }
-
+    // AI Logic (Pose Estimation)
     const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
-    pose.setOptions({ modelComplexity: 0, minDetectionConfidence: 0.5 });
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
 
     pose.onResults((res) => {
         if (!res.poseLandmarks) return;
         canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
-        
+        drawConnectors(canvasCtx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#0ea5e9', lineWidth: 2});
+
         const lm = res.poseLandmarks;
-        const hud = document.getElementById('hud');
-        let currentAngle = 0;
-
-        // منطق "الوكيل الذكي" بناءً على المنطقة المحددة
-        if (subType === 'neck') {
-            // قياس زاوية الرقبة (الأذن - الكتف - خط مستقيم)
-            currentAngle = calculateAngle(lm[7], lm[11], {x: lm[11].x, y: lm[11].y - 0.1});
-            if (currentAngle > 30) {
-                hud.innerText = "🚨 ارفع رأسك! الرقبة مائلة للأمام";
-                hud.style.color = "var(--danger)";
-                speak("ارفع رأسك");
-            } else {
-                hud.innerText = "وضعية الرقبة سليمة ✅";
-                hud.style.color = "var(--success)";
+        const angle = calculateAngle(lm[11], lm[23], lm[25]); 
+        
+        if (angle < 160) {
+            if (stage === 'start') {
+                reps++;
+                document.getElementById('live-reps').innerText = reps;
+                speak(reps.toString());
+                stage = 'end';
             }
-        } else if (subType === 'disc') {
-            // قياس زاوية الظهر (كتف - حوض - ركبة)
-            currentAngle = calculateAngle(lm[11], lm[23], lm[25]);
-            if (currentAngle < 155) {
-                hud.innerText = "🚨 انتبه! ظهرك منحني للأمام";
-                hud.style.color = "var(--danger)";
-                speak("استقم");
-            } else {
-                hud.innerText = "وضعية الظهر سليمة ✅";
-                hud.style.color = "var(--success)";
-                if (currentAngle > 175) stage = "ready";
-                if (currentAngle < 165 && stage === "ready") { reps++; stage = "done"; speak(reps.toString()); }
-            }
-        }
-
-        document.getElementById('angle-val').innerText = Math.round(currentAngle) + "°";
-        document.getElementById('count').innerText = reps;
-        drawConnectors(canvasCtx, lm, POSE_CONNECTIONS, {color: '#38bdf8', lineWidth: 2});
+        } else { stage = 'start'; }
     });
 
     function calculateAngle(a, b, c) {
