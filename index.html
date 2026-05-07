@@ -1,220 +1,155 @@
-<!DOCTYPE html>
-<html lang="ar" dir="rtl">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>AI Physioh Pro - Clinical Version</title>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script type="module">
-    import { PoseLandmarker, FilesetResolver, DrawingUtils } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0';
+import customtkinter as ctk
+import cv2
+import mediapipe as mp
+import numpy as np
+from PIL import Image, ImageTk
+import pandas as pd
+from datetime import datetime
+import pyttsx3
+import threading
 
-    let reps = 0;
-    let stage = "down";
-    let feedback = "استعد لبدء التمرين";
+# --- 1. إعدادات المحركات الخلفية ---
+engine = pyttsx3.init()
+def speak(text):
+    threading.Thread(target=lambda: (engine.say(text), engine.runAndWait())).start()
 
-    // دالة التوجيه الصوتي
-    function speak(text) {
-      const msg = new SpeechSynthesisUtterance(text);
-      msg.lang = 'ar-SA';
-      window.speechSynthesis.speak(msg);
-    }
+mp_pose = mp.solutions.pose
+pose = mp_pose.Pose(min_detection_confidence=0.7, min_tracking_confidence=0.7)
+mp_drawing = mp.solutions.drawing_utils
 
-    // دالة حساب الزاوية بين ثلاث نقاط (مثل قياسات PostureScreen)
-    function calculateAngle(p1, p2, p3) {
-      const radians = Math.atan2(p3.y - p2.y, p3.x - p2.x) - Math.atan2(p1.y - p2.y, p1.x - p2.x);
-      let angle = Math.abs((radians * 180.0) / Math.PI);
-      if (angle > 180.0) angle = 360 - angle;
-      return angle;
-    }
+# --- 2. الكلاس الرئيسي للتطبيق ---
+class SmartPhysioFullApp(ctk.CTk):
+    def __init__(self):
+        super().__init__()
 
-    window.startPoseDetection = async function () {
-      const video = document.getElementById('video');
-      const canvas = document.getElementById('canvas');
-      const ctx = canvas.getContext('2d');
-      const status = document.getElementById('status');
-      
-      status.innerText = 'جاري الاتصال بالمدرب الرقمي...';
+        # إعدادات النافذة
+        self.title("نظام AI Physio Pro المتكامل")
+        self.geometry("1300x800")
+        ctk.set_appearance_mode("dark")
+        
+        # متغيرات التشغيل والقاعدة
+        self.counter = 0
+        self.stage = None
+        self.current_exercise = "الكوع"
+        self.history_data = [] 
 
-      const vision = await FilesetResolver.forVisionTasks('https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.0/wasm');
-      const poseLandmarker = await PoseLandmarker.createFromOptions(vision, {
-        baseOptions: { modelAssetPath: 'https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/latest/pose_landmarker_lite.task' },
-        runningMode: 'VIDEO', numPoses: 1
-      });
+        # --- بناء الواجهة الرسومية ---
+        self.grid_columnconfigure(1, weight=1)
+        self.grid_rowconfigure(0, weight=1)
 
-      const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-      video.srcObject = stream;
+        # الجانب الأيسر: التحكم والقائمة
+        self.sidebar = ctk.CTkFrame(self, width=280, corner_radius=15)
+        self.sidebar.grid(row=0, column=0, padx=20, pady=20, sticky="nsew")
+        
+        ctk.CTkLabel(self.sidebar, text="العيادة الذكية", font=("Arial", 26, "bold")).pack(pady=30)
+        
+        # أزرار التمارين
+        self.btn_elbow = ctk.CTkButton(self.sidebar, text="تمرين ثني الكوع", height=45, command=lambda: self.select_ex("الكوع"))
+        self.btn_elbow.pack(pady=10, padx=20)
+        
+        self.btn_shoulder = ctk.CTkButton(self.sidebar, text="تمرين رفع الكتف", height=45, command=lambda: self.select_ex("الكتف"))
+        self.btn_shoulder.pack(pady=10, padx=20)
 
-      video.addEventListener('loadeddata', () => {
-        canvas.width = video.videoWidth;
-        canvas.height = video.videoHeight;
-        const drawingUtils = new DrawingUtils(ctx);
+        # زر حفظ البيانات
+        self.save_btn = ctk.CTkButton(self.sidebar, text="تصدير التقرير (Excel)", fg_color="#27ae60", hover_color="#2ecc71", command=self.export_to_excel)
+        self.save_btn.pack(side="bottom", pady=40, padx=20)
 
-        async function detect() {
-          ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-          const results = poseLandmarker.detectForVideo(video, performance.now());
+        # الجانب الأيمن: الكاميرا والبيانات
+        self.main_view = ctk.CTkFrame(self, corner_radius=15, fg_color="#121212")
+        self.main_view.grid(row=0, column=1, padx=20, pady=20, sticky="nsew")
+        
+        self.video_display = ctk.CTkLabel(self.main_view, text="")
+        self.video_display.pack(expand=True, fill="both", padx=15, pady=15)
 
-          if (results.landmarks.length > 0) {
-            const landmarks = results.landmarks[0];
+        # شريط المعلومات السفلي
+        self.bottom_bar = ctk.CTkFrame(self, height=150, corner_radius=15)
+        self.bottom_bar.grid(row=1, column=0, columnspan=2, padx=20, pady=(0, 20), sticky="ew")
+        
+        self.angle_text = ctk.CTkLabel(self.bottom_bar, text="الزاوية: 0°", font=("Arial", 25))
+        self.angle_text.pack(side="left", expand=True)
+
+        self.counter_text = ctk.CTkLabel(self.bottom_bar, text="0", font=("Arial", 70, "bold"), text_color="#3498db")
+        self.counter_text.pack(side="left", expand=True)
+
+        self.status_text = ctk.CTkLabel(self.bottom_bar, text="جاهز للبدء", font=("Arial", 22), text_color="#f1c40f")
+        self.status_text.pack(side="left", expand=True)
+
+        # بدء الكاميرا
+        self.cap = cv2.VideoCapture(0)
+        self.run_ai_loop()
+
+    # --- المنطق البرمجي ---
+    def select_ex(self, ex_name):
+        self.current_exercise = ex_name
+        self.counter = 0
+        self.stage = None
+        speak(f"تم اختيار تمرين {ex_name}")
+
+    def calc_angle(self, a, b, c):
+        a, b, c = np.array(a), np.array(b), np.array(c)
+        radians = np.arctan2(c[1]-b[1], c[0]-b[0]) - np.arctan2(a[1]-b[1], a[0]-b[0])
+        angle = np.abs(radians*180.0/np.pi)
+        return 360-angle if angle > 180 else angle
+
+    def export_to_excel(self):
+        if not self.history_data:
+            speak("لا توجد بيانات لحفظها")
+            return
+        df = pd.DataFrame(self.history_data, columns=['الوقت', 'نوع التمرين', 'العدة رقم'])
+        filename = f"Physio_Report_{datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+        df.to_excel(filename, index=False)
+        speak("تم حفظ التقرير")
+        self.status_text.configure(text="تم الحفظ!", text_color="green")
+
+    def run_ai_loop(self):
+        ret, frame = self.cap.read()
+        if ret:
+            # معالجة الصورة
+            frame = cv2.flip(frame, 1)
+            image = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = pose.process(image)
             
-            // رسم النقاط
-            drawingUtils.drawLandmarks(landmarks, { radius: 3, color: '#3B82F6' });
-            drawingUtils.drawConnectors(landmarks, PoseLandmarker.POSE_CONNECTIONS, { color: '#FFFFFF', lineWidth: 2 });
+            if results.pose_landmarks:
+                lm = results.pose_landmarks.landmark
+                
+                # جلب الإحداثيات
+                s = [lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].x, lm[mp_pose.PoseLandmark.RIGHT_SHOULDER.value].y]
+                e = [lm[mp_pose.PoseLandmark.RIGHT_ELBOW.value].x, lm[mp_pose.PoseLandmark.RIGHT_ELBOW.value].y]
+                w = [lm[mp_pose.PoseLandmark.RIGHT_WRIST.value].x, lm[mp_pose.PoseLandmark.RIGHT_WRIST.value].y]
+                h = [lm[mp_pose.PoseLandmark.RIGHT_HIP.value].x, lm[mp_pose.PoseLandmark.RIGHT_HIP.value].y]
 
-            processPhysioLogic(landmarks);
-          }
-          requestAnimationFrame(detect);
-        }
+                # حساب الزاوية حسب التمرين المختار
+                if self.current_exercise == "الكوع":
+                    angle = self.calc_angle(s, e, w)
+                else: # الكتف
+                    angle = self.calc_angle(h, s, e)
 
-        function processPhysioLogic(landmarks) {
-          const nose = landmarks[0];
-          const leftShoulder = landmarks[11];
-          const leftEar = landmarks[7];
-          const leftHip = landmarks[23];
+                # منطق العدّ
+                if angle > 160:
+                    if self.stage == "up":
+                        self.counter += 1
+                        speak(str(self.counter))
+                        self.history_data.append([datetime.now().strftime("%H:%M:%S"), self.current_exercise, self.counter])
+                    self.stage = "down"
+                
+                if angle < 30:
+                    self.stage = "up"
 
-          // 1. حساب زاوية القوام (Posture Angle)
-          // نقيس الزاوية بين الأذن والكتف والورك لتقييم انحناء الرقبة
-          const neckAngle = calculateAngle(leftEar, leftShoulder, leftHip);
-          document.getElementById('liveAngle').innerText = Math.round(neckAngle) + "°";
+                # تحديث الشاشة
+                self.angle_text.configure(text=f"الزاوية: {int(angle)}°")
+                self.counter_text.configure(text=str(self.counter))
+                
+                # رسم النقاط
+                mp_drawing.draw_landmarks(image, results.pose_landmarks, mp_pose.POSE_CONNECTIONS)
 
-          // 2. تحليل الحالة وتصحيحها (Biofeedback مثل Kaia Health)
-          let currentStatus = "وضعية جيدة ✅";
-          let alertClass = "bg-green-100 text-green-800";
+            # عرض الصورة في الواجهة
+            img = Image.fromarray(image)
+            imgtk = ImageTk.PhotoImage(image=img)
+            self.video_display.imgtk = imgtk
+            self.video_display.configure(image=imgtk)
+            
+        self.after(10, self.run_ai_loop)
 
-          if (neckAngle < 150) { // زاوية تشير لميل الرأس للأمام
-            currentStatus = "تنبيه: ارفع رأسك للخلف ⚠️";
-            alertClass = "bg-red-100 text-red-800 animate-pulse";
-            if (performance.now() % 100 < 10) feedback = "صحح وضعية رقبتك"; 
-          }
-
-          // 3. عداد التكرارات الذكي لتمارين Chin Tuck
-          // نراقب المسافة الأفقية بين الأنف والكتف
-          const horizontalDist = Math.abs(nose.x - leftShoulder.x);
-          
-          if (horizontalDist > 0.15) {
-            stage = "back"; 
-          }
-          if (horizontalDist < 0.10 && stage === "back") {
-            stage = "down";
-            reps++;
-            speak(reps); // عد صوتي
-            document.getElementById('repsDisplay').innerText = reps;
-            updateProgress(reps);
-          }
-
-          document.getElementById('resultBox').innerText = currentStatus;
-          document.getElementById('resultBox').className = `p-5 rounded-2xl text-xl font-bold ${alertClass}`;
-        }
-
-        detect();
-        status.innerText = 'المدرب الرقمي متصل الآن ✅';
-        speak("أهلاً بك في جلستك العلاجية. قف بشكل جانبي لنبدأ التحليل.");
-      });
-    };
-
-    function updateProgress(currentReps) {
-        const progress = Math.min((currentReps / 10) * 100, 100);
-        document.getElementById('progressBar').style.width = progress + "%";
-    }
-  </script>
-  <style>
-    @import url('https://fonts.googleapis.com/css2?family=Tajawal:wght@400;700&display=swap');
-    body { background: #f0f4f8; font-family: 'Tajawal', sans-serif; }
-    .glass { background: rgba(255,255,255,0.8); backdrop-filter: blur(12px); border: 1px solid rgba(255,255,255,0.3); }
-    .video-container { border: 8px solid #1e3a8a; box-shadow: 0 20px 50px rgba(0,0,0,0.2); }
-  </style>
-</head>
-<body class="text-blue-900">
-
-  <header class="bg-gradient-to-r from-blue-900 to-blue-700 text-white p-6 shadow-2xl">
-    <div class="max-w-6xl mx-auto flex justify-between items-center">
-        <div>
-            <h1 class="text-3xl font-bold italic">AI Physioh <span class="text-yellow-400">Pro</span></h1>
-            <p class="text-blue-200 text-sm">نظام التأهيل السريري المدعوم بالذكاء الاصطناعي</p>
-        </div>
-        <div class="text-right hidden md:block">
-            <p class="text-xs opacity-75">المريض: عبد المنعم الطيب</p>
-            <p class="text-xs opacity-75">الحالة: Forward Head Protocol</p>
-        </div>
-    </div>
-  </header>
-
-  <main class="max-w-6xl mx-auto p-4 grid lg:grid-cols-3 gap-6 mt-6">
-    
-    <div class="lg:col-span-2 space-y-4">
-        <div class="glass rounded-3xl p-4 relative overflow-hidden video-container">
-            <div class="absolute top-4 right-4 z-10 bg-black/50 text-white px-4 py-2 rounded-full text-sm backdrop-blur-md">
-                زاوية القوام الحالية: <span id="liveAngle" class="font-bold text-yellow-400">--</span>
-            </div>
-            <video id="video" autoplay playsinline class="w-full rounded-2xl bg-black aspect-video object-cover"></video>
-            <canvas id="canvas" class="absolute top-4 left-4 w-[calc(100%-32px)] h-[calc(100%-32px)] pointer-events-none"></canvas>
-        </div>
-        <button onclick="startPoseDetection()" class="w-full bg-blue-600 hover:bg-blue-800 text-white py-5 rounded-2xl text-xl font-bold shadow-xl transition-all hover:scale-[1.02] active:scale-95">
-            ابدأ الفحص السريري الآن
-        </button>
-        <p id="status" class="text-center font-medium opacity-70 italic">جاهز لاستقبال بيانات الحركة...</p>
-    </div>
-
-    <div class="space-y-6">
-        <div class="glass rounded-3xl p-6 shadow-lg border-r-4 border-blue-600">
-            <h3 class="text-lg font-bold mb-3">التشخيص اللحظي</h3>
-            <div id="resultBox" class="p-5 bg-blue-50 rounded-2xl text-center text-gray-400 font-bold">
-                في انتظار تشغيل الكاميرا...
-            </div>
-        </div>
-
-        <div class="glass rounded-3xl p-6 shadow-lg">
-            <h3 class="text-lg font-bold mb-3 text-blue-800">عداد التكرارات (Chin Tuck)</h3>
-            <div class="flex items-center justify-between bg-white p-4 rounded-2xl shadow-inner border border-gray-100">
-                <span class="text-5xl font-black text-blue-900" id="repsDisplay">0</span>
-                <div class="text-right">
-                    <p class="text-sm text-gray-500 font-bold">الهدف اليومي</p>
-                    <p class="text-xl font-bold">10 تكرارات</p>
-                </div>
-            </div>
-            <div class="w-full bg-gray-200 h-3 rounded-full mt-4 overflow-hidden">
-                <div id="progressBar" class="bg-blue-600 h-full w-0 transition-all duration-500"></div>
-            </div>
-        </div>
-
-        <div class="glass rounded-3xl p-6 shadow-lg">
-            <h3 class="text-lg font-bold mb-4">مؤشرات الأداء (Dashboard)</h3>
-            <div class="grid grid-cols-2 gap-3 text-center">
-                <div class="bg-blue-50 p-3 rounded-xl border border-blue-100">
-                    <span class="block text-xs text-blue-400">التزام</span>
-                    <span class="text-xl font-bold">92%</span>
-                </div>
-                <div class="bg-green-50 p-3 rounded-xl border border-green-100">
-                    <span class="block text-xs text-green-400">تحسن ROM</span>
-                    <span class="text-xl font-bold">+15°</span>
-                </div>
-            </div>
-        </div>
-    </div>
-  </main>
-
-  <section class="max-w-6xl mx-auto p-4 mb-10">
-    <div class="glass rounded-3xl p-8 shadow-xl">
-        <h2 class="text-2xl font-bold mb-6 flex items-center gap-2">
-            <span class="bg-blue-600 text-white p-2 rounded-lg">ℹ️</span>
-            دليل التمارين المخصصة لك
-        </h2>
-        <div class="grid md:grid-cols-3 gap-6">
-            <div class="border-l-4 border-blue-600 pl-4">
-                <h4 class="font-bold text-blue-900 text-lg">1. Chin Tucks</h4>
-                <p class="text-sm text-gray-600 leading-relaxed">اسحب ذقنك للداخل كأنك تريد صنع "ذقن مزدوج". هذا التمرين يقوي عضلات الرقبة العميقة.</p>
-            </div>
-            <div class="border-l-4 border-blue-600 pl-4">
-                <h4 class="font-bold text-blue-900 text-lg">2. Scapular Squeezes</h4>
-                <p class="text-sm text-gray-600 leading-relaxed">قم بضم لوحي الكتف لبعضهما البعض. يساعد في علاج الأكتاف المستديرة (Rounded Shoulders).</p>
-            </div>
-            <div class="border-l-4 border-blue-600 pl-4">
-                <h4 class="font-bold text-blue-900 text-lg">3. Wall Slides</h4>
-                <p class="text-sm text-gray-600 leading-relaxed">قف بظهرك على الحائط وارفع ذراعيك ببطء. تمرين مثالي لفتح الصدر وتحسين القوام.</p>
-            </div>
-        </div>
-    </div>
-  </section>
-
-</body>
-</html>
+if __name__ == "__main__":
+    app = SmartPhysioFullApp()
+    app.mainloop()
