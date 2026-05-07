@@ -3,138 +3,172 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>نظام التأهيل الذكي - تشغيل فوري</title>
+    <title>نظام التوجيه الذكي - النسخة الاحترافية</title>
     
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils"></script>
     <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils"></script>
 
     <style>
-        :root { --primary: #0ea5e9; --success: #22c55e; --warning: #f59e0b; }
-        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: #f1f5f9; margin: 0; padding: 15px; }
-        .container { max-width: 600px; margin: auto; }
+        :root { --accent: #38bdf8; --bg: #f8fafc; --card: #ffffff; }
+        body { font-family: 'Segoe UI', Tahoma, sans-serif; background-color: var(--bg); color: #1e293b; margin: 0; padding: 15px; }
         
-        /* نسق الكاميرا الاحترافي */
-        .camera-card { 
-            position: relative; width: 100%; aspect-ratio: 3/4; 
-            background: #000; border-radius: 30px; overflow: hidden;
-            box-shadow: 0 20px 25px -5px rgba(0,0,0,0.1); border: 4px solid white;
+        .main-container { max-width: 1000px; margin: auto; }
+        .app-header { text-align: center; margin-bottom: 20px; font-size: 1.5rem; font-weight: bold; }
+
+        /* نسق الكاميرا المماثل للصورة */
+        .camera-section { 
+            position: relative; 
+            width: 100%; 
+            background: #000; 
+            border-radius: 25px; /* حواف منحنية مثل الصورة */
+            overflow: hidden;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            aspect-ratio: 4/5; /* تناسب طولي للموبايل */
         }
         #video-input { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
         #output-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; transform: scaleX(-1); }
 
-        /* لوحة البيانات */
-        .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 15px; }
-        .stat-item { background: white; padding: 15px; border-radius: 20px; text-align: center; }
-        .val { display: block; font-size: 2rem; font-weight: bold; color: var(--primary); }
+        /* مربعات البيانات تحت الكاميرا */
+        .stats-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
+        .stat-card { background: var(--card); padding: 15px; border-radius: 15px; text-align: center; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+        .label { display: block; font-size: 0.9rem; color: #64748b; margin-bottom: 5px; }
+        .value { font-size: 1.8rem; font-weight: bold; color: #0f172a; }
 
-        /* صندوق التعليمات (مثل الصورة) */
-        #instruction-box { 
-            background: #fef9c3; color: #854d0e; padding: 20px; border-radius: 20px; 
-            margin-top: 15px; text-align: center; font-weight: bold; border: 1px solid #fde68a;
+        /* صندوق التوجيه (الأصفر في الصورة) */
+        #feedback-box { 
+            margin-top: 15px; padding: 20px; border-radius: 15px; 
+            background: #fef9c3; color: #854d0e; /* اللون الأصفر في الصورة */
+            font-weight: bold; text-align: center; font-size: 1.1rem;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.05);
         }
+
+        /* وصف التمرين (الجزء التعليمي) */
+        .instruction-card { background: #eff6ff; padding: 15px; border-radius: 15px; margin-top: 15px; border-right: 5px solid var(--accent); }
         
-        #guide-text { background: white; padding: 15px; border-radius: 20px; margin-top: 10px; font-size: 0.9rem; line-height: 1.5; }
-        .btn-main { background: var(--primary); color: white; border: none; width: 100%; padding: 15px; border-radius: 20px; font-weight: bold; margin-top: 10px; cursor: pointer; }
+        .hidden { display: none; }
+        button { background: var(--accent); color: white; border: none; padding: 15px; border-radius: 15px; width: 100%; font-size: 1.1rem; font-weight: bold; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div id="setup">
-        <div class="stat-item">
-            <h2>مرحباً دكتور عبد المنعم 🦾</h2>
-            <p>اختر نوع التمرين لبدء الرصد الآلي:</p>
-            <select id="ex-type" style="width:100%; padding:12px; border-radius:10px; margin-bottom:15px;">
-                <option value="neck">تمارين الرقبة (Neck Retraction)</option>
-                <option value="back">تمارين أعلى الظهر (Scapular)</option>
-                <option value="shoulder">تمارين الكتف (Wall Climbing)</option>
-            </select>
-            <button class="btn-main" onclick="init()">بدء الكاميرا الآن</button>
-        </div>
+<div class="main-container">
+    <div class="app-header">🤖 نظام التوجيه الذكي</div>
+
+    <div id="setup-page" class="stat-card">
+        <select id="exercise-type" style="width:100%; padding:10px; margin-bottom:10px; border-radius:10px;">
+            <option value="neck">تمرين الرقبة (Neck Retraction)</option>
+            <option value="shoulder">تمرين الكتف (Wall Climbing)</option>
+            <option value="back">تمرين أعلى الظهر (Scapular)</option>
+        </select>
+        <button onclick="startApp()">بدء التمرين الآن</button>
     </div>
 
-    <div id="active-workout" style="display:none;">
-        <div class="camera-card">
+    <div id="workout-page" class="hidden">
+        <div class="camera-section">
             <video id="video-input" autoplay playsinline></video>
             <canvas id="output-canvas"></canvas>
         </div>
 
-        <div class="stats">
-            <div class="stat-item"><span>العدات</span><span id="counter" class="val">0</span></div>
-            <div class="stat-item"><span>الزاوية</span><span id="angle" class="val">0°</span></div>
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span class="label">عدد التكرارات</span>
+                <span id="counter" class="value">0</span>
+            </div>
+            <div class="stat-card">
+                <span class="label">الزاوية الحالية</span>
+                <span id="angle-val" class="value">0°</span>
+            </div>
         </div>
 
-        <div id="instruction-box">💡 قف بوضوح أمام الكاميرا...</div>
-        
-        <div id="guide-text">
-            <b id="guide-title"></b>: <span id="guide-desc"></span>
+        <div id="feedback-box">💡 قف بوضوح أمام الكاميرا لبدء الرصد...</div>
+
+        <div class="instruction-card">
+            <strong id="ex-title"></strong>
+            <p id="ex-guide" style="font-size: 0.9rem; line-height: 1.4; margin-top: 5px;"></p>
         </div>
+        
+        <button onclick="location.reload()" style="background:#64748b; margin-top:15px;">إيقاف الجلسة</button>
     </div>
 </div>
 
 <script>
-    const exercises = {
-        neck: { t: "سحب الذقن", d: "اسحب ذقنك للخلف (Double Chin) بدون خفض الرأس.", msg: "ارفع ذقنك واسحب للخلف" },
-        back: { t: "ضم الكتف", d: "اسحب لوحي الكتف للخلف كأنك تغلق سوستة الظهر.", msg: "افرد ظهرك وضم الكتفين" },
-        shoulder: { t: "تسلق الحائط", d: "ارفع يدك على الحائط تدريجياً ببطء.", msg: "ارفع يدك للأعلى" }
+    const exData = {
+        neck: { title: "سحب الذقن (Neck Retraction)", guide: "اسحب ذقنك للخلف ببطء كأنك تصنع ذقناً مزدوجة. حافظ على نظرك للأمام. كرر 10 مرات." },
+        shoulder: { title: "تسلق الحائط (Wall Climbing)", guide: "قف بمواجهة الحائط، حرك أصابعك للأعلى ببطء حتى أقصى مدى مريح، ثم انزل ببطء." },
+        back: { title: "ضم لوحي الكتف", guide: "اسحب كتفيك للخلف وللأسفل كأنك تحاول عصر ليمونة بين لوحي كتفك." }
     };
 
-    let count = 0, stage = "up", synth = window.speechSynthesis;
+    let counter = 0;
+    let stage = null;
+    let synth = window.speechSynthesis;
 
-    function speak(t) { if(!synth.speaking) { let u = new SpeechSynthesisUtterance(t); u.lang='ar-SA'; synth.speak(u); } }
-
-    async function init() {
-        const type = document.getElementById('ex-type').value;
-        document.getElementById('guide-title').innerText = exercises[type].t;
-        document.getElementById('guide-desc').innerText = exercises[type].d;
-        document.getElementById('setup').style.display = 'none';
-        document.getElementById('active-workout').style.display = 'block';
-
-        const video = document.getElementById('video-input');
-        const canvas = document.getElementById('output-canvas');
-        const ctx = canvas.getContext('2d');
-
-        const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
-        pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
-
-        pose.onResults((res) => {
-            if (!res.poseLandmarks) return;
-            canvas.width = video.videoWidth; canvas.height = video.videoHeight;
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            drawConnectors(ctx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#0ea5e9', lineWidth: 3});
-
-            const lm = res.poseLandmarks;
-            // حساب زاوية الجذع (كتف - حوض - ركبة)
-            const ang = calculateAngle(lm[11], lm[23], lm[25]);
-            document.getElementById('angle').innerText = Math.round(ang) + "°";
-
-            // منطق العد التلقائي
-            if (ang < 160) {
-                if (stage === "up") {
-                    document.getElementById('instruction-box').innerText = "ممتاز! استمر في الحركة";
-                    document.getElementById('instruction-box').style.background = "#dcfce7";
-                    stage = "down";
-                }
-            }
-            if (ang > 175 && stage === "down") {
-                count++;
-                document.getElementById('counter').innerText = count;
-                document.getElementById('instruction-box').innerText = "✅ رائعة! عدة مكتملة";
-                document.getElementById('instruction-box').style.background = "#fef9c3";
-                speak(count.toString());
-                stage = "up";
-            }
-        });
-
-        const camera = new Camera(video, { onFrame: async () => { await pose.send({image: video}); }, width: 640, height: 480 });
-        camera.start();
+    function speak(text) {
+        if (synth.speaking) return;
+        let msg = new SpeechSynthesisUtterance(text);
+        msg.lang = 'ar-SA';
+        synth.speak(msg);
     }
+
+    function startApp() {
+        const type = document.getElementById('exercise-type').value;
+        document.getElementById('ex-title').innerText = exData[type].title;
+        document.getElementById('ex-guide').innerText = exData[type].guide;
+        
+        document.getElementById('setup-page').classList.add('hidden');
+        document.getElementById('workout-page').classList.remove('hidden');
+        
+        initAI();
+        speak("بدء التمرين. اتبع التعليمات الموضحة أسفل الشاشة.");
+    }
+
+    const pose = new Pose({locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/pose/${f}`});
+    pose.setOptions({ modelComplexity: 1, smoothLandmarks: true, minDetectionConfidence: 0.5 });
+
+    pose.onResults((res) => {
+        if (!res.poseLandmarks) return;
+        canvasCtx.clearRect(0, 0, canvasElement.width, canvasElement.height);
+        drawConnectors(canvasCtx, res.poseLandmarks, POSE_CONNECTIONS, {color: '#22c55e', lineWidth: 3});
+        drawLandmarks(canvasCtx, res.poseLandmarks, {color: '#ef4444', radius: 2});
+
+        const lm = res.poseLandmarks;
+        const angle = calculateAngle(lm[11], lm[23], lm[25]);
+        document.getElementById('angle-val').innerText = Math.round(angle) + "°";
+
+        if (angle < 155) {
+            stage = "down";
+            document.getElementById('feedback-box').innerText = "💪 ممتاز! الآن استقم ببطء";
+            document.getElementById('feedback-box').style.background = "#dcfce7"; 
+        }
+        if (angle > 170 && stage === "down") {
+            stage = "up";
+            counter++;
+            document.getElementById('counter').innerText = counter;
+            document.getElementById('feedback-box').innerText = "✅ حركة صحيحة! استمر";
+            document.getElementById('feedback-box').style.background = "#fef9c3";
+            speak(counter.toString());
+        }
+    });
 
     function calculateAngle(a, b, c) {
         let r = Math.atan2(c.y-b.y, c.x-b.x) - Math.atan2(a.y-b.y, a.x-b.x);
         let ang = Math.abs(r * 180 / Math.PI);
         return ang > 180 ? 360 - ang : ang;
+    }
+
+    const videoElement = document.getElementById('video-input');
+    const canvasElement = document.getElementById('output-canvas');
+    const canvasCtx = canvasElement.getContext('2d');
+
+    function initAI() {
+        new Camera(videoElement, {
+            onFrame: async () => { 
+                canvasElement.width = videoElement.videoWidth;
+                canvasElement.height = videoElement.videoHeight;
+                await pose.send({image: videoElement}); 
+            },
+            width: 640, height: 480
+        }).start();
     }
 </script>
 </body>
